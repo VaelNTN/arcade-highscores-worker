@@ -1,0 +1,20 @@
+{
+  "name": "arcade-highscores-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Gedeelde Cloudflare Worker + D1 API voor Click Planet, Cat Hanger, Cat Climber en Fair Coin Slots",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "setup": "node scripts/setup.mjs",
+    "db:create": "wrangler d1 create arcade-highscores-db",
+    "db:init": "wrangler d1 execute arcade-highscores-db --remote --file=./schema.sql",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250214.0",
+    "typescript": "^5.7.3",
+    "wrangler": "^3.109.0"
+  }
+}
