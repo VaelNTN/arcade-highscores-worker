@@ -213,6 +213,48 @@ function ensureSchema(db: D1Database): Promise<void> {
         db.prepare(
           `CREATE INDEX IF NOT EXISTS idx_ahg_score ON arcade_hub_game_scores (game_id, score DESC, updated_at ASC)`
         ),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS castle_bastion_scores (
+            device_id TEXT PRIMARY KEY,
+            player_name TEXT NOT NULL,
+            wave INTEGER NOT NULL DEFAULT 1,
+            kills INTEGER NOT NULL DEFAULT 0,
+            score INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL
+          )
+        `),
+        db.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_cb_score ON castle_bastion_scores (score DESC, wave DESC, updated_at ASC)`
+        ),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS turbo_drift_scores (
+            track_id TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            player_name TEXT NOT NULL,
+            best_time_ms INTEGER NOT NULL,
+            wins INTEGER NOT NULL DEFAULT 0,
+            car_id INTEGER NOT NULL DEFAULT 0,
+            driver_id INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (track_id, device_id)
+          )
+        `),
+        db.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_tdr_time ON turbo_drift_scores (track_id, best_time_ms ASC, updated_at ASC)`
+        ),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS turbo_drift_rooms (
+            room_code TEXT NOT NULL,
+            track_id TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            updated_at_ms INTEGER NOT NULL,
+            PRIMARY KEY (room_code, track_id, device_id)
+          )
+        `),
+        db.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_tdr_room ON turbo_drift_rooms (room_code, track_id, updated_at_ms DESC)`
+        ),
       ])
       .then(() => undefined)
       .catch((err) => {
@@ -1456,6 +1498,180 @@ async function handleArcadeHub(request: Request, url: URL, env: Env): Promise<Re
   return null;
 }
 
+interface CastleBastionRow {
+  device_id: string;
+  player_name: string;
+  wave: number;
+  kills: number;
+  score: number;
+  updated_at: string;
+}
+
+async function handleCastleBastion(request: Request, url: URL, env: Env): Promise<Response | null> {
+  const path = url.pathname;
+  if (request.method === 'GET' && path === '/api/castle-bastion/highscores') {
+    const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 30), 1), 100);
+    const { results } = await env.DB.prepare(
+      `SELECT device_id, player_name, wave, kills, score, updated_at
+       FROM castle_bastion_scores
+       ORDER BY score DESC, wave DESC, updated_at ASC
+       LIMIT ?`
+    ).bind(limit).all<CastleBastionRow>();
+
+    return jsonResponse({
+      ok: true,
+      entries: results.map((r, i) => ({
+        rank: i + 1,
+        deviceId: r.device_id,
+        playerName: r.player_name,
+        wave: r.wave,
+        kills: r.kills,
+        score: r.score,
+        updatedAt: r.updated_at,
+      })),
+    });
+  }
+
+  if (request.method === 'POST' && path === '/api/castle-bastion/score') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const deviceId = cleanDeviceId(body?.deviceId);
+    if (!deviceId) return jsonResponse({ ok: false, error: 'INVALID_DEVICE_ID' }, 400);
+    const playerName = cleanName(body?.playerName, 'Kasteelheer');
+    const wave = Math.max(1, Math.trunc(Number(body?.wave ?? 1)));
+    const kills = Math.max(0, Math.trunc(Number(body?.kills ?? 0)));
+    const score = Math.max(0, Math.trunc(Number(body?.score ?? 0)));
+    const now = new Date().toISOString();
+
+    await env.DB.prepare(
+      `INSERT INTO castle_bastion_scores (device_id, player_name, wave, kills, score, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(device_id) DO UPDATE SET
+         player_name = excluded.player_name,
+         wave = MAX(castle_bastion_scores.wave, excluded.wave),
+         kills = MAX(castle_bastion_scores.kills, excluded.kills),
+         score = MAX(castle_bastion_scores.score, excluded.score),
+         updated_at = CASE WHEN excluded.score > castle_bastion_scores.score THEN excluded.updated_at ELSE castle_bastion_scores.updated_at END`
+    ).bind(deviceId, playerName, wave, kills, score, now).run();
+
+    return jsonResponse({ ok: true });
+  }
+
+  return null;
+}
+
+interface TurboDriftRow {
+  track_id: string;
+  device_id: string;
+  player_name: string;
+  best_time_ms: number;
+  wins: number;
+  car_id: number;
+  driver_id: number;
+  updated_at: string;
+}
+
+async function handleTurboDrift(request: Request, url: URL, env: Env): Promise<Response | null> {
+  const path = url.pathname;
+
+  if (request.method === 'GET' && path === '/api/turbo-drift/highscores') {
+    const trackId = cleanName(url.searchParams.get('trackId'), 'zonnedal').slice(0, 32);
+    const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 25), 1), 100);
+    const { results } = await env.DB.prepare(
+      `SELECT track_id, device_id, player_name, best_time_ms, wins, car_id, driver_id, updated_at
+       FROM turbo_drift_scores
+       WHERE track_id = ?
+       ORDER BY best_time_ms ASC, updated_at ASC
+       LIMIT ?`
+    ).bind(trackId, limit).all<TurboDriftRow>();
+
+    return jsonResponse({
+      ok: true,
+      trackId,
+      entries: results.map((r, i) => ({
+        rank: i + 1,
+        trackId: r.track_id,
+        deviceId: r.device_id,
+        playerName: r.player_name,
+        bestTimeMs: r.best_time_ms,
+        wins: r.wins,
+        carId: r.car_id,
+        driverId: r.driver_id,
+        updatedAt: r.updated_at,
+      })),
+    });
+  }
+
+  if (request.method === 'POST' && path === '/api/turbo-drift/score') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const deviceId = cleanDeviceId(body?.deviceId);
+    if (!deviceId) return jsonResponse({ ok: false, error: 'INVALID_DEVICE_ID' }, 400);
+    const playerName = cleanName(body?.playerName, 'DriftKoning');
+    const trackId = cleanName(body?.trackId, 'zonnedal').slice(0, 32);
+    const bestTimeMs = Math.max(1000, Math.trunc(Number(body?.bestTimeMs ?? 0)));
+    const winInc = body?.win ? 1 : 0;
+    const carId = Math.max(0, Math.trunc(Number(body?.carId ?? 0)));
+    const driverId = Math.max(0, Math.trunc(Number(body?.driverId ?? 0)));
+    const now = new Date().toISOString();
+
+    await env.DB.prepare(
+      `INSERT INTO turbo_drift_scores (track_id, device_id, player_name, best_time_ms, wins, car_id, driver_id, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(track_id, device_id) DO UPDATE SET
+         player_name = excluded.player_name,
+         best_time_ms = MIN(turbo_drift_scores.best_time_ms, excluded.best_time_ms),
+         wins = turbo_drift_scores.wins + ?,
+         car_id = excluded.car_id,
+         driver_id = excluded.driver_id,
+         updated_at = excluded.updated_at`
+    ).bind(trackId, deviceId, playerName, bestTimeMs, winInc, carId, driverId, now, winInc).run();
+
+    return jsonResponse({ ok: true });
+  }
+
+  if (request.method === 'POST' && path.startsWith('/api/turbo-drift/rooms/') && path.endsWith('/sync')) {
+    const seg = path.slice('/api/turbo-drift/rooms/'.length, -'/sync'.length);
+    const roomCode = decodeURIComponent(seg).toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 16) || 'OPEN-1';
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const trackId = cleanName(body?.trackId, 'zonnedal').slice(0, 32);
+    const racer = body?.racer as Record<string, unknown> | undefined;
+    const deviceId = cleanDeviceId(racer?.deviceId);
+    if (!deviceId || !racer) return jsonResponse({ ok: false, error: 'INVALID_RACER' }, 400);
+
+    const nowMs = Date.now();
+    const cutoff = nowMs - 10_000;
+
+    await env.DB.prepare(
+      `DELETE FROM turbo_drift_rooms WHERE room_code = ? AND track_id = ? AND updated_at_ms < ?`
+    ).bind(roomCode, trackId, cutoff).run();
+
+    await env.DB.prepare(
+      `INSERT INTO turbo_drift_rooms (room_code, track_id, device_id, payload_json, updated_at_ms)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(room_code, track_id, device_id) DO UPDATE SET
+         payload_json = excluded.payload_json,
+         updated_at_ms = excluded.updated_at_ms`
+    ).bind(roomCode, trackId, deviceId, JSON.stringify(racer), nowMs).run();
+
+    const { results } = await env.DB.prepare(
+      `SELECT payload_json FROM turbo_drift_rooms WHERE room_code = ? AND track_id = ? AND updated_at_ms >= ?`
+    ).bind(roomCode, trackId, cutoff).all<{ payload_json: string }>();
+
+    const racers = results
+      .map((row) => {
+        try {
+          return JSON.parse(row.payload_json) as unknown;
+        } catch {
+          return null;
+        }
+      })
+      .filter((x) => x !== null);
+
+    return jsonResponse({ ok: true, roomCode, trackId, racers });
+  }
+
+  return null;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === 'OPTIONS') {
@@ -1479,6 +1695,8 @@ export default {
           'one-walk-fighter',
           'pocket-tanks',
           'arcade-hub',
+          'castle-bastion',
+          'turbo-drift',
         ],
       });
     }
@@ -1514,6 +1732,12 @@ export default {
 
     const ah = await handleArcadeHub(request, url, env);
     if (ah) return ah;
+
+    const cb = await handleCastleBastion(request, url, env);
+    if (cb) return cb;
+
+    const td = await handleTurboDrift(request, url, env);
+    if (td) return td;
 
     return jsonResponse({ ok: false, error: 'NOT_FOUND' }, 404);
   },
