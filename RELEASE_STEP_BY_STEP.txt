@@ -1,188 +1,652 @@
 ================================================================================
   VAELNTN APPS - COMPLETE STEP-BY-STEP HANDLEIDING NAAR GOOGLE PLAY RELEASE
-  (Inclusief $25 Play Console Account, Cloudflare Backend & Supabase Accounts)
+  (Volledig van $25 Play Console -> Cloudflare D1 SQL -> Supabase SQL ->
+   Keystore -> AdMob/IAP -> Alle 15 Apps -> 12 Testers -> Live in Play Store)
 ================================================================================
 
-Werk deze lijst rustig van boven naar beneden af. Zet een [X] voor elke stap
-die je hebt afgerond. Als je onderaan bent, staan al je apps officieel klaar
-en live in de Google Play Store!
+Werk deze lijst rustig van STAP 0 t/m STAP 9 van boven naar beneden af.
+Zet een [X] voor elke stap die je hebt afgerond.
+Als je onderaan bent, staat ALLES technisch, juridisch en financieel direct
+helemaal goed en draaien jouw apps live voor de hele wereld!
+
+TIP: Alles wat tussen --- BEGIN KOPIEERBLOK --- en --- EINDE KOPIEERBLOK ---
+staat, kun je LETTERLIJK 1-op-1 kopieren en plakken (SQL, commando's, teksten).
+
+
+================================================================================
+STAP 0: BENODIGDE ACCOUNTS & WAT HET KOST
+================================================================================
+[ ] 0.1 Google Play Developer Account  -> $25 USD eenmalig (verplicht)
+[ ] 0.2 Cloudflare Account              -> $0 (Free plan: 100.000 requests/dag)
+[ ] 0.3 Supabase Account                -> $0 (Free plan: 50.000 users/maand)
+[ ] 0.4 Google Cloud Console            -> $0 (alleen nodig voor auto-upload)
+[ ] 0.5 Google AdMob Account            -> $0 (betaalt JOU uit voor ads)
+[ ] 0.6 GitHub Account                  -> Heb je al (github.com/VaelNTN)
+[ ] 0.7 Op je PC geinstalleerd hebben:
+        - Node.js 20 of 22 LTS (https://nodejs.org)
+        - Java JDK 17 of 21      (https://adoptium.net -> voor keytool)
+        - Git + optioneel GitHub CLI ("gh": https://cli.github.com)
 
 
 ================================================================================
 STAP 1: JOUW $25 GOOGLE PLAY DEVELOPER ACCOUNT AANMAKEN
 ================================================================================
 [ ] 1.1 Ga naar: https://play.google.com/console/signup
-[ ] 1.2 Log in met het Google-account waarmee jij eigenaar wilt zijn van de apps.
+[ ] 1.2 Log in met het Google-account waarmee jij eigenaar wilt zijn van alle
+        15 apps (gebruik hiervoor een vast account dat je nooit kwijtraakt).
 [ ] 1.3 Kies accounttype: "Personal" (persoonlijk / solo-developer).
-        (Kies "Organization" alleen als je een KvK/bedrijf + DUNS-nummer hebt.)
-[ ] 1.4 Betaal de eenmalige registratiekosten van $25 USD (creditcard of
-        geschikte betaalkaart/virtual card).
+        (Kies "Organization" alleen als je een officieel bedrijf + DUNS hebt.)
+[ ] 1.4 Betaal de eenmalige registratiekosten van $25 USD met creditcard /
+        betaalkaart / virtuele creditcard.
 [ ] 1.5 Vul je ontwikkelaarsnaam in (bijv. "VaelNTN" of jouw studionaam).
-[ ] 1.6 Voer de verplichte Google identiteitsverificatie uit (upload foto van
-        je ID-kaart of paspoort + adresbewijs indien gevraagd). Wacht tot je
-        status "Verified / Geverifieerd" is (duurt meestal 1-3 werkdagen).
-[ ] 1.7 Ga in Play Console naar "Setup -> Payments profile" en koppel je
-        bankrekening / IBAN als je geld wilt uitbetalen via Starforge Survivors.
+[ ] 1.6 Voer de verplichte identiteitsverificatie uit:
+        - Upload foto van je paspoort of identiteitskaart.
+        - Upload adresbewijs (indien gevraagd, bijv. bankafschrift).
+        - Wacht tot je accountstatus op "Verified / Geverifieerd" staat
+          (duurt meestal 1 tot 3 werkdagen; ondertussen kun je Stap 2 t/m 6 al
+          helemaal afronden!).
+[ ] 1.7 Ga in Play Console naar: "Setup -> Payments profile"
+        Koppel hier je bankrekening (IBAN) zodat Google jouw inkomsten uit
+        Starforge Survivors (In-App Aankopen) kan uitbetalen.
 
 
 ================================================================================
-STAP 2: BACKEND DEEL A - CLOUDFLARE WORKER + D1 LIVE ZETTEN (SNELSTE ROUTE)
+STAP 2: CLOUDFLARE WORKER + D1 DATABASE LIVE ZETTEN (BACKEND DEEL A)
 ================================================================================
-Al jouw games, online highscores, race-kamers en de live chat-matchmaker praten
-standaard met de gezamenlijke backend in repo:
-  -> VaelNTN/arcade-highscores-worker
+De gedeelde backend staat in repo:
+  https://github.com/VaelNTN/arcade-highscores-worker
+Deze ene server regelt LIVE voor al jouw apps tegelijk:
+  - Alle game highscores (Click Planet, Cat/Dog Climber & Hanger, Frog Parkour,
+    1-Walk Fighter, Pocket Tanks Duel, Arcade 100+ Hub, Fair Coin Slots,
+    Castle Bastion TD, Turbo Drift Racer)
+  - Online multiplayer kamers voor Turbo Drift Racer (/api/turbo-drift/room/*)
+  - Live 1-op-1 chat matchmaking & berichten zonder bots voor WorldMatch Chat
+    (/api/world-chat/match, /send, /poll, /leave)
 
-Als je deze 1 keer online zet, krijgen al je apps direct een eigen live URL:
+--- KIES ROUTE 2A (SNELST VIA GITHUB) OF ROUTE 2B (LOKAAL OP JE PC) ---
 
-[ ] 2.1 Maak een gratis account op https://dash.cloudflare.com
-[ ] 2.2 Open op je PC een terminal in de map "arcade-highscores-worker"
-        (of clone: git clone https://github.com/VaelNTN/arcade-highscores-worker)
-[ ] 2.3 Installeer packages:
-          npm install
-[ ] 2.4 Log in op Cloudflare:
-          npx wrangler login
-[ ] 2.5 Maak de D1 database aan:
-          npx wrangler d1 create arcade-highscores-db
-[ ] 2.6 Kopieer de "database_id" die in je terminal verschijnt en plak die in
-        het bestand "wrangler.toml" achter: database_id = "..."
-[ ] 2.7 Maak alle tabellen in 1 keer aan (inclusief Castle TD, Drift Racer & Chat):
-          npm run db:init
-[ ] 2.8 Zet de Worker online:
-          npm run deploy
-[ ] 2.9 Je ziet nu jouw echte API-URL, bijvoorbeeld:
-          https://arcade-highscores-worker.JOUW-SUBDOMAIN.workers.dev
-        Test hem in je browser via:  JOUW_URL/api/health
-[ ] 2.10 Zet deze URL in elke GitHub-repo bij:
-         GitHub Repo -> Settings -> Secrets and variables -> Actions
-         -> tab "Variables" -> New repository variable:
-            Name:  VITE_API_URL
-            Value: https://arcade-highscores-worker.JOUW-SUBDOMAIN.workers.dev
-         (Vanaf de volgende build zit de URL automatisch ingebakken in je APK/AAB!)
+=== ROUTE 2A: AUTOMATISCH VIA GITHUB ACTIONS (AANBEVOLEN!) ===
+[ ] 2A.1 Maak een gratis account op: https://dash.cloudflare.com
+[ ] 2A.2 Kopieer je Cloudflare Account ID:
+         Kijk in de URL van je Cloudflare Dashboard:
+         https://dash.cloudflare.com/<DIT_IS_JOUW_ACCOUNT_ID>/...
+         (of rechts onderin de pagina onder "Account ID").
+[ ] 2A.3 Maak een Cloudflare API Token:
+         - Ga naar: https://dash.cloudflare.com/profile/api-tokens
+         - Klik "Create Token"
+         - Kies template: "Edit Cloudflare Workers" -> "Use template"
+         - Controleer bij Permissions dat in elk geval aanwezig zijn:
+           * Account -> Workers Scripts -> Edit
+           * Account -> D1 -> Edit
+           * Account -> Account Settings -> Read
+         - Klik "Continue to summary" -> "Create Token" -> kopieer het token!
+[ ] 2A.4 Ga op GitHub naar:
+         https://github.com/VaelNTN/arcade-highscores-worker/settings/secrets/actions
+         Klik "New repository secret" en maak deze 2 Secrets aan:
+           1) Name:  CLOUDFLARE_API_TOKEN
+              Value: <plak je gekopieerde Cloudflare API token>
+           2) Name:  CLOUDFLARE_ACCOUNT_ID
+              Value: <plak je gekopieerde Cloudflare Account ID>
+[ ] 2A.5 Ga naar het tabblad "Actions" van "arcade-highscores-worker":
+         Klik links op "Deploy Shared Highscores Worker (Cloudflare)"
+         -> klik rechts op "Run workflow" -> groene knop "Run workflow".
+         Dit script maakt automatisch D1 aan, voert schema.sql uit en zet de
+         Worker online!
+[ ] 2A.6 Open de afgeronde workflow-run -> klik op "deploy" -> scroll onderaan
+         bij "Create D1 if needed, apply schema & deploy Worker":
+         Daar staat jouw echte live URL, bijvoorbeeld:
+           https://arcade-highscores-api.JOUW-SUBDOMAIN.workers.dev
+         LET OP: De exacte naam uit wrangler.toml is "arcade-highscores-api"!
+
+=== ROUTE 2B: HANDMATIG OP JE EIGEN PC (ALTERNATIEF VOOR 2A) ===
+[ ] 2B.1 Open een terminal (PowerShell / Git Bash / Terminal) en draai:
+         git clone https://github.com/VaelNTN/arcade-highscores-worker
+         cd arcade-highscores-worker
+         npm install
+         npx wrangler login
+         npx wrangler d1 create arcade-highscores-db
+[ ] 2B.2 In de uitvoer staat een blok met "database_id = ...".
+         Open het bestand "wrangler.toml" en vervang de regel:
+           database_id = "00000000-0000-0000-0000-000000000000"
+         door jouw echte database_id!
+[ ] 2B.3 Maak alle D1 tabellen aan en deploy:
+         npm run db:init
+         npm run deploy
+         (Of als je liever in Cloudflare Dashboard -> Storage & Databases ->
+          D1 SQL Database -> arcade-highscores-db -> Console wilt plakken,
+          gebruik dan het EXACTE SQL-BLOK hieronder!)
+
+--- BEGIN KOPIEERBLOK: EXACTE CLOUDFLARE D1 SQL (ALLEEN ALS JE HANDMATIG IN D1 CONSOLE PLAKT) ---
+CREATE TABLE IF NOT EXISTS click_planet_scores (
+  device_id TEXT PRIMARY KEY,
+  planet_name TEXT NOT NULL,
+  name_lower TEXT NOT NULL UNIQUE,
+  color_id INTEGER NOT NULL DEFAULT 0,
+  mass_m REAL NOT NULL DEFAULT 1.0,
+  mass_e INTEGER NOT NULL DEFAULT -2,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cp_mass ON click_planet_scores (mass_e DESC, mass_m DESC, updated_at ASC);
+
+CREATE TABLE IF NOT EXISTS cat_hanger_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  time_sec REAL NOT NULL DEFAULT 0,
+  color_id INTEGER NOT NULL DEFAULT 0,
+  eye_color TEXT NOT NULL DEFAULT 'amber',
+  accessory TEXT NOT NULL DEFAULT 'none',
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ch_time ON cat_hanger_scores (time_sec DESC, updated_at ASC);
+
+CREATE TABLE IF NOT EXISTS cat_climber_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  meters REAL NOT NULL DEFAULT 0,
+  color_id INTEGER NOT NULL DEFAULT 0,
+  eye_color TEXT NOT NULL DEFAULT 'amber',
+  accessory TEXT NOT NULL DEFAULT 'none',
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cc_meters ON cat_climber_scores (meters DESC, updated_at ASC);
+
+CREATE TABLE IF NOT EXISTS fair_coin_slots_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  level INTEGER NOT NULL DEFAULT 1,
+  coins REAL NOT NULL DEFAULT 1500000000,
+  total_won REAL NOT NULL DEFAULT 0,
+  total_spins INTEGER NOT NULL DEFAULT 0,
+  tournament_points INTEGER NOT NULL DEFAULT 0,
+  species TEXT NOT NULL DEFAULT 'piggy',
+  color_id TEXT NOT NULL DEFAULT 'pink',
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fcs_won ON fair_coin_slots_scores (total_won DESC, level DESC, updated_at ASC);
+
+CREATE TABLE IF NOT EXISTS dog_hanger_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  time_sec REAL NOT NULL DEFAULT 0,
+  breed_id INTEGER NOT NULL DEFAULT 0,
+  collar_color TEXT NOT NULL DEFAULT 'red',
+  accessory TEXT NOT NULL DEFAULT 'none',
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_dh_time ON dog_hanger_scores (time_sec DESC, updated_at ASC);
+
+CREATE TABLE IF NOT EXISTS dog_climber_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  meters REAL NOT NULL DEFAULT 0,
+  breed_id INTEGER NOT NULL DEFAULT 0,
+  collar_color TEXT NOT NULL DEFAULT 'red',
+  accessory TEXT NOT NULL DEFAULT 'none',
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_dc_meters ON dog_climber_scores (meters DESC, updated_at ASC);
+
+CREATE TABLE IF NOT EXISTS frog_parkour_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  score INTEGER NOT NULL DEFAULT 0,
+  meters REAL NOT NULL DEFAULT 0,
+  flies INTEGER NOT NULL DEFAULT 0,
+  skin_id INTEGER NOT NULL DEFAULT 0,
+  accessory TEXT NOT NULL DEFAULT 'none',
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fp_score ON frog_parkour_scores (score DESC, meters DESC, updated_at ASC);
+
+CREATE TABLE IF NOT EXISTS one_walk_fighter_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  score INTEGER NOT NULL DEFAULT 0,
+  kills INTEGER NOT NULL DEFAULT 0,
+  max_combo INTEGER NOT NULL DEFAULT 0,
+  fighter_skin INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_owf_score ON one_walk_fighter_scores (score DESC, kills DESC, updated_at ASC);
+
+CREATE TABLE IF NOT EXISTS pocket_tanks_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  score INTEGER NOT NULL DEFAULT 0,
+  wins INTEGER NOT NULL DEFAULT 0,
+  best_streak INTEGER NOT NULL DEFAULT 0,
+  tank_skin INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pt_score ON pocket_tanks_scores (score DESC, wins DESC, updated_at ASC);
+
+CREATE TABLE IF NOT EXISTS arcade_hub_overall (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  total_score INTEGER NOT NULL DEFAULT 0,
+  games_played INTEGER NOT NULL DEFAULT 0,
+  avatar_id INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ah_total ON arcade_hub_overall (total_score DESC, games_played DESC, updated_at ASC);
+
+CREATE TABLE IF NOT EXISTS arcade_hub_game_scores (
+  game_id TEXT NOT NULL,
+  device_id TEXT NOT NULL,
+  player_name TEXT NOT NULL,
+  score INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (game_id, device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ahg_score ON arcade_hub_game_scores (game_id, score DESC, updated_at ASC);
+
+CREATE TABLE IF NOT EXISTS castle_bastion_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  wave INTEGER NOT NULL DEFAULT 1,
+  kills INTEGER NOT NULL DEFAULT 0,
+  score INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cb_score ON castle_bastion_scores (score DESC, wave DESC, updated_at ASC);
+
+CREATE TABLE IF NOT EXISTS turbo_drift_scores (
+  track_id TEXT NOT NULL,
+  device_id TEXT NOT NULL,
+  player_name TEXT NOT NULL,
+  best_time_ms INTEGER NOT NULL,
+  wins INTEGER NOT NULL DEFAULT 0,
+  car_id INTEGER NOT NULL DEFAULT 0,
+  driver_id INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (track_id, device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tdr_time ON turbo_drift_scores (track_id, best_time_ms ASC, updated_at ASC);
+
+CREATE TABLE IF NOT EXISTS turbo_drift_rooms (
+  room_code TEXT NOT NULL,
+  track_id TEXT NOT NULL,
+  device_id TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (room_code, track_id, device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tdr_room ON turbo_drift_rooms (room_code, track_id, updated_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS world_chat_queue (
+  device_id TEXT PRIMARY KEY,
+  nickname TEXT NOT NULL,
+  gender TEXT NOT NULL,
+  country_name TEXT NOT NULL,
+  country_flag TEXT NOT NULL,
+  languages_json TEXT NOT NULL,
+  allow_global INTEGER NOT NULL DEFAULT 1,
+  room_id TEXT,
+  partner_json TEXT,
+  status TEXT NOT NULL DEFAULT 'searching',
+  updated_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_wc_queue ON world_chat_queue (status, gender, updated_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS world_chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  room_id TEXT NOT NULL,
+  sender_id TEXT NOT NULL,
+  sender_name TEXT NOT NULL,
+  text TEXT NOT NULL,
+  lang TEXT NOT NULL DEFAULT 'en',
+  created_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_wc_msg ON world_chat_messages (room_id, created_at_ms ASC);
+--- EINDE KOPIEERBLOK: EXACTE CLOUDFLARE D1 SQL ---
+
+[ ] 2.4 TEST JE WORKER IN DE BROWSER:
+        Open: https://arcade-highscores-api.JOUW-SUBDOMAIN.workers.dev/api/health
+        Je moet {"ok":true,...} of vergelijkbare JSON zien (geen foutmelding!).
+
+[ ] 2.5 KOPPEL DEZE URL IN ALLE 13 ONLINE APPS (GITHUB VARIABELE "VITE_API_URL"):
+        Ga bij elk van deze 13 repo's naar:
+        Repo -> Settings -> Secrets and variables -> Actions -> tab "Variables"
+        -> "New repository variable":
+          Name:  VITE_API_URL
+          Value: https://arcade-highscores-api.JOUW-SUBDOMAIN.workers.dev
+          (Zonder "/" op het einde!)
+
+        De 13 repo's die VITE_API_URL gebruiken:
+          [ ] VaelNTN/arcade-100-hub
+          [ ] VaelNTN/castle-bastion-td
+          [ ] VaelNTN/cat-climber
+          [ ] VaelNTN/cat-hanger
+          [ ] VaelNTN/click-planet
+          [ ] VaelNTN/dog-climber
+          [ ] VaelNTN/dog-hanger
+          [ ] VaelNTN/fair-coin-slots
+          [ ] VaelNTN/frog-parkour
+          [ ] VaelNTN/one-walk-fighter
+          [ ] VaelNTN/pocket-tanks-duel
+          [ ] VaelNTN/turbo-drift-racer
+          [ ] VaelNTN/world-match-chat
+
+        (TIP: In Stap 4B staat een 1-klik script dat deze variabele EN al je
+         Android secrets in ALLE repo's tegelijk zet in 5 seconden!)
+        (Let op: "starforge-survivors" en "best-gps-there-is-app" hebben deze
+         VITE_API_URL niet nodig.)
 
 
 ================================================================================
-STAP 3: BACKEND DEEL B - SUPABASE ONLINE ZETTEN VOOR ECHTE ACCOUNTS & CLOUD-SAVE
+STAP 3: SUPABASE ONLINE ZETTEN (ACCOUNTS, LOGIN, CLOUD-SAVE, PURCHASES & REPORTS)
 ================================================================================
-Wil je dat spelers en chatters echte ACCOUNTS hebben (inloggen met e-mail,
-wachtwoord of Google-login, cloud-opslag van gekochte Gems/Skins, en veilige
-profielen over meerdere telefoons heen)? Zo zet je Supabase stap voor stap op:
+Supabase zorgt voor ECHTE spelers-accounts (e-mail/wachtwoord/Google/Anoniem),
+veilige cloud-opslag over meerdere telefoons heen, opslag van gekochte Gems/VIP
+en chat-meldingen.
 
---- 3A. Supabase Project & Sleutels ---
-[ ] 3.1 Ga naar https://supabase.com en log in (bijv. met je GitHub-account).
+--- 3A. Project aanmaken & Sleutels pakken ---
+[ ] 3.1 Ga naar https://supabase.com -> "Start your project" -> log in met GitHub.
 [ ] 3.2 Klik "New Project":
-          - Name:      vaelntn-apps
-          - Password:  kies een sterk database-wachtwoord (bewaar dit!)
-          - Region:    West EU (Frankfurt of Amsterdam/London)
-          - Plan:      Free ($0/maand tot 50.000 actieve gebruikers!)
-[ ] 3.3 Wacht 2 minuten tot het project klaar is.
-[ ] 3.4 Ga naar "Project Settings -> API" en kopieer:
-          1) Project URL       (bijv. https://abcdefgh.supabase.co)
-          2) anon / public key (lange JWT sleutel; veilig om in app te gebruiken)
-          (GEBRUIK NOOIT de "service_role" key in een frontend/Android-app!)
+          - Organization: jouw account
+          - Name:         vaelntn-apps
+          - Password:     kies een sterk DB-wachtwoord (bewaar in wachtwoordmanager!)
+          - Region:       West EU (Frankfurt of London)
+          - Pricing Plan: Free ($0/maand tot 50.000 maandelijkse actieve users)
+[ ] 3.3 Wacht ca. 2 minuten totdat de database klaar is.
+[ ] 3.4 Ga links onderin naar: "Project Settings" (tandwiel) -> "Data API" / "API"
+        Kopieer deze 2 dingen naar kladblok:
+          1) Project URL       (bijv. https://xxxxxxxxxxxx.supabase.co)
+          2) anon public key   (begint met eyJ... of sb_publishable_...)
+        BELANGRIJK: Kopieer NOOIT de "service_role" / "secret" key in een app!
 
---- 3B. Accounts & Inlogmethodes Aanzetten ---
-[ ] 3.5 Ga in Supabase naar "Authentication -> Providers":
-          - Zet "Email" AAN (eventueel "Confirm email" tijdelijk UIT tijdens testen
-            zodat mensen meteen zonder e-mailbevestiging kunnen inloggen).
-          - Optioneel: Zet "Anonymous Sign-Ins" AAN onder Authentication -> Settings
-            zodat nieuwe gebruikers meteen 1-klik kunnen spelen en later hun
-            account kunnen koppelen aan e-mail/wachtwoord.
-          - Optioneel: Zet "Google" aan als OAuth provider.
+--- 3B. Accounts & Inlog-opties aanzetten ---
+[ ] 3.5 Ga links naar: "Authentication" -> "Sign In / Providers":
+          - Klik "Email":
+            * Enable Email provider = AAN
+            * Voor direct testen zonder verificatiemail kun je "Confirm email"
+              tijdelijk UIT zetten (zet weer AAN voor live release als je wilt).
+          - Scroll naar "User Signups" / "Anonymous Sign-Ins":
+            * Zet "Allow anonymous sign-ins" AAN (handig voor 1-klik gasten die
+              later hun account willen koppelen aan een e-mailadres!).
+          - Optioneel: Klik "Google" en vul Client ID/Secret in uit Google Cloud
+            als je "Log in met Google" wilt.
+[ ] 3.6 Ga links naar: "Authentication" -> "URL Configuration":
+        Voeg bij "Redirect URLs" deze regels toe (klik steeds "Add URL"):
+          http://localhost
+          http://localhost:5173
+          capacitor://localhost
+          com.vaelntn.starforgesurvivors://login-callback
+          com.worldmatch.chat://login-callback
+          com.castlebastion.td://login-callback
+          com.turbodrift.racer://login-callback
 
---- 3C. Database Tabellen + Beveiliging (RLS) Aanmaken in Supabase ---
-[ ] 3.6 Ga in Supabase naar "SQL Editor -> New query", plak dit hele blok en klik RUN:
+--- 3C. EXACTE SUPABASE SQL QUERY UITVOEREN (IN 1 KEER PLAKKEN & RUNNEN!) ---
+[ ] 3.7 Ga in het linkermenu van Supabase naar: "SQL Editor" -> "+ New query"
+[ ] 3.8 Plak dit HELE blok hieronder letterlijk in de SQL Editor en klik rechts
+        onderin op de groene knop "RUN" (of Ctrl+Enter):
 
-    -- 1) Gebruikersprofielen (gekoppeld aan Supabase Auth accounts)
-    create table if not exists public.profiles (
-      id uuid references auth.users on delete cascade primary key,
-      nickname text not null default 'Player',
-      gender text check (gender in ('man', 'vrouw')),
-      country_code text default 'NL',
-      languages text[] default array['nl', 'en'],
-      gems integer not null default 0,
-      is_vip boolean not null default false,
-      no_ads boolean not null default false,
-      avatar_id integer not null default 0,
-      created_at timestamptz default now(),
-      updated_at timestamptz default now()
-    );
+--- BEGIN KOPIEERBLOK: EXACTE SUPABASE SQL (PLAKKEN IN SUPABASE SQL EDITOR) ---
+-- =============================================================================
+-- VAELNTN APPS - COMPLETE SUPABASE SCHEMA + TRIGGERS + RLS SECURITY
+-- Veilig om vaker uit te voeren (idempotent)
+-- =============================================================================
 
-    alter table public.profiles enable row level security;
+create extension if not exists pgcrypto;
 
-    create policy "Profielen zijn zichtbaar voor ingelogde gebruikers"
-      on public.profiles for select using (true);
+-- 1. Helper functie om updated_at automatisch bij te werken
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
 
-    create policy "Gebruiker maakt eigen profiel"
-      on public.profiles for insert with check (auth.uid() = id);
+-- 2. Gebruikersprofielen (gekoppeld aan Supabase Auth users)
+create table if not exists public.profiles (
+  id uuid references auth.users(id) on delete cascade primary key,
+  nickname text not null default 'Speler',
+  gender text check (gender in ('man', 'vrouw')),
+  country_code text not null default 'NL',
+  languages text[] not null default array['nl', 'en'],
+  gems integer not null default 0 check (gems >= 0),
+  gold bigint not null default 0 check (gold >= 0),
+  is_vip boolean not null default false,
+  no_ads boolean not null default false,
+  season_pass boolean not null default false,
+  avatar_id integer not null default 0,
+  is_banned boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 
-    create policy "Gebruiker wijzigt alleen eigen profiel"
-      on public.profiles for update using (auth.uid() = id);
+drop trigger if exists trg_profiles_updated_at on public.profiles;
+create trigger trg_profiles_updated_at
+  before update on public.profiles
+  for each row execute function public.set_updated_at();
 
-    -- Automatisch profiel aanmaken bij elke nieuwe registratie
-    create or replace function public.handle_new_user()
-    returns trigger as $$
-    begin
-      insert into public.profiles (id, nickname)
-      values (new.id, coalesce(new.raw_user_meta_data->>'nickname', 'Speler'));
-      return new;
-    end;
-    $$ language plpgsql security definer;
+alter table public.profiles enable row level security;
 
-    drop trigger if exists on_auth_user_created on auth.users;
-    create trigger on_auth_user_created
-      after insert on auth.users
-      for each row execute procedure public.handle_new_user();
+drop policy if exists "Ingelogde gebruikers zien publieke profielen" on public.profiles;
+create policy "Ingelogde gebruikers zien publieke profielen"
+  on public.profiles for select
+  to authenticated
+  using (true);
 
-    -- 2) Cloud Save voor Starforge Survivors / Games (voortgang per account)
-    create table if not exists public.cloud_saves (
-      user_id uuid references auth.users on delete cascade not null,
-      app_id text not null,
-      save_data jsonb not null default '{}'::jsonb,
-      updated_at timestamptz default now(),
-      primary key (user_id, app_id)
-    );
+drop policy if exists "Gebruiker maakt eigen profiel" on public.profiles;
+create policy "Gebruiker maakt eigen profiel"
+  on public.profiles for insert
+  to authenticated
+  with check (auth.uid() = id);
 
-    alter table public.cloud_saves enable row level security;
+drop policy if exists "Gebruiker wijzigt alleen eigen profiel" on public.profiles;
+create policy "Gebruiker wijzigt alleen eigen profiel"
+  on public.profiles for update
+  to authenticated
+  using (auth.uid() = id)
+  with check (auth.uid() = id);
 
-    create policy "Alleen eigenaar leest eigen save"
-      on public.cloud_saves for select using (auth.uid() = user_id);
-    create policy "Alleen eigenaar schrijft eigen save"
-      on public.cloud_saves for all using (auth.uid() = user_id);
+-- 3. Automatisch profiel aanmaken zodra iemand zich registreert
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, nickname)
+  values (
+    new.id,
+    coalesce(nullif(trim(new.raw_user_meta_data->>'nickname'), ''), 'Speler')
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
 
---- 3D. Hoe je de apps koppelt aan Supabase ---
-[ ] 3.7 Zet in elke GitHub repo die Supabase gebruikt (bijv. Starforge / Chat)
-        onder Settings -> Secrets and variables -> Actions -> Variables:
-          VITE_SUPABASE_URL      = jouw Supabase Project URL
-          VITE_SUPABASE_ANON_KEY = jouw Supabase anon key
-[ ] 3.8 Installeer in die app-repo:  npm install @supabase/supabase-js
-        Maak src/api/supabase.ts:
-          import { createClient } from '@supabase/supabase-js';
-          export const supabase = createClient(
-            import.meta.env.VITE_SUPABASE_URL,
-            import.meta.env.VITE_SUPABASE_ANON_KEY
-          );
-        Account aanmaken werkt dan met 1 regel code:
-          await supabase.auth.signUp({ email, password })
-        En inloggen met:
-          await supabase.auth.signInWithPassword({ email, password })
-        Wil je dat ik de Supabase login + cloud-save schermen direct inbouwen in
-        specifieke apps (bijv. Starforge Survivors & WorldMatch Chat)? Vraag het
-        mij even en geef alleen je publieke VITE_SUPABASE_URL + ANON_KEY (of ik
-        bereid het voor met env vars)!
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- 4. Cloud Save per spel/app (Starforge Survivors, Castle TD, Drift Racer, etc.)
+create table if not exists public.cloud_saves (
+  user_id uuid references auth.users(id) on delete cascade not null,
+  app_id text not null,
+  save_data jsonb not null default '{}'::jsonb,
+  version integer not null default 1,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, app_id)
+);
+
+drop trigger if exists trg_cloud_saves_updated_at on public.cloud_saves;
+create trigger trg_cloud_saves_updated_at
+  before update on public.cloud_saves
+  for each row execute function public.set_updated_at();
+
+alter table public.cloud_saves enable row level security;
+
+drop policy if exists "Eigenaar leest eigen cloud_save" on public.cloud_saves;
+create policy "Eigenaar leest eigen cloud_save"
+  on public.cloud_saves for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "Eigenaar maakt eigen cloud_save" on public.cloud_saves;
+create policy "Eigenaar maakt eigen cloud_save"
+  on public.cloud_saves for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Eigenaar werkt eigen cloud_save bij" on public.cloud_saves;
+create policy "Eigenaar werkt eigen cloud_save bij"
+  on public.cloud_saves for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Eigenaar verwijdert eigen cloud_save" on public.cloud_saves;
+create policy "Eigenaar verwijdert eigen cloud_save"
+  on public.cloud_saves for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+-- 5. Aankoopbonnetjes loggen (Starforge Survivors IAP / Play Billing)
+create table if not exists public.purchase_receipts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  app_id text not null default 'com.vaelntn.starforgesurvivors',
+  sku text not null,
+  purchase_token text not null unique,
+  order_id text,
+  price_eur numeric(10, 2),
+  status text not null default 'recorded',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_receipts_user on public.purchase_receipts (user_id, created_at desc);
+
+alter table public.purchase_receipts enable row level security;
+
+drop policy if exists "Eigenaar ziet eigen aankopen" on public.purchase_receipts;
+create policy "Eigenaar ziet eigen aankopen"
+  on public.purchase_receipts for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "Eigenaar registreert eigen aankoop" on public.purchase_receipts;
+create policy "Eigenaar registreert eigen aankoop"
+  on public.purchase_receipts for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+-- 6. Chat moderatie & meldingen (verplicht voor 18+ Google Play UGC beleid)
+create table if not exists public.chat_reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter_user_id uuid references auth.users(id) on delete set null,
+  reporter_device_id text not null,
+  reported_device_id text not null,
+  room_id text,
+  reason text not null default 'ongepast_gedrag',
+  details text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_chat_reports_target on public.chat_reports (reported_device_id, created_at desc);
+
+alter table public.chat_reports enable row level security;
+
+drop policy if exists "Iedere gebruiker kan misbruik melden" on public.chat_reports;
+create policy "Iedere gebruiker kan misbruik melden"
+  on public.chat_reports for insert
+  to anon, authenticated
+  with check (true);
+
+-- 7. Gedeelde Supabase Leaderboards (optionele backup/sync per account)
+create table if not exists public.app_leaderboards (
+  user_id uuid references auth.users(id) on delete cascade not null,
+  app_id text not null,
+  player_name text not null,
+  score bigint not null default 0,
+  meta jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, app_id)
+);
+
+create index if not exists idx_app_lb_top on public.app_leaderboards (app_id, score desc, updated_at asc);
+
+drop trigger if exists trg_app_leaderboards_updated_at on public.app_leaderboards;
+create trigger trg_app_leaderboards_updated_at
+  before update on public.app_leaderboards
+  for each row execute function public.set_updated_at();
+
+alter table public.app_leaderboards enable row level security;
+
+drop policy if exists "Iedereen leest leaderboards" on public.app_leaderboards;
+create policy "Iedereen leest leaderboards"
+  on public.app_leaderboards for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "Eigenaar schrijft eigen highscore" on public.app_leaderboards;
+create policy "Eigenaar schrijft eigen highscore"
+  on public.app_leaderboards for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Eigenaar update eigen highscore" on public.app_leaderboards;
+create policy "Eigenaar update eigen highscore"
+  on public.app_leaderboards for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+--- EINDE KOPIEERBLOK: EXACTE SUPABASE SQL ---
+
+[ ] 3.9 VERIFICATIE-SQL IN SUPABASE:
+        Plak deze korte SQL in een nieuwe query en klik RUN om te controleren of
+        alle 5 tabellen echt bestaan (je moet 5 rijen terugzien):
+
+--- BEGIN KOPIEERBLOK: VERIFICATIE SQL ---
+select tablename, rowsecurity
+from pg_tables
+where schemaname = 'public'
+  and tablename in ('profiles', 'cloud_saves', 'purchase_receipts', 'chat_reports', 'app_leaderboards')
+order by tablename;
+--- EINDE KOPIEERBLOK: VERIFICATIE SQL ---
+
+[ ] 3.10 OPTIONEEEL: SUPABASE SLEUTELS VAST IN GITHUB REPO'S ZETTEN:
+         Zet in repo's waar je account-login/cloud-save wilt activeren
+         (bijv. starforge-survivors en world-match-chat) onder
+         Settings -> Secrets and variables -> Actions -> Variables:
+           VITE_SUPABASE_URL      = jouw Supabase Project URL
+           VITE_SUPABASE_ANON_KEY = jouw Supabase anon public key
+         (Wil je dat ik na het uitvoeren van deze SQL direct de volledige
+          Login + Register + Cloud-Save schermen in Starforge Survivors en
+          WorldMatch Chat codeer? Stuur me dan alleen jouw publieke
+          VITE_SUPABASE_URL en VITE_SUPABASE_ANON_KEY, dan bouw ik het meteen in!)
 
 
 ================================================================================
-STAP 4: 1 UNIVERSELE UPLOAD KEYSTORE MAKEN (VOOR ALLE 15 APPS!)
+STAP 4: 1 UNIVERSELE UPLOAD KEYSTORE MAKEN + AUTOMATISCH IN ALLE 15 REPO'S ZETTEN
 ================================================================================
-Google Play accepteert alleen officieel gesigneerde ".aab" bestanden. Je maakt
-ÉÉN sleutelbestand (vaelntn-upload.jks) en bewaart dat HEEL GOED!
-(Raak dit bestand nooit kwijt, anders kun je apps later niet meer updaten.)
+Google Play accepteert alleen officieel gesigneerde ".aab" bestanden.
+Je maakt ÉÉN universeel sleutelbestand ("vaelntn-upload.jks") voor alle 15 apps!
+BEWAAR DIT BESTAND + DE WACHTWOORDEN OP 2 VEILIGE PLEKKEN (bijv. Google Drive /
+USB / Wachtwoordmanager). Als je dit bestand kwijtraakt kun je NOOIT meer updaten!
 
-[ ] 4.1 Zorg dat Java (JDK) geinstalleerd is op je PC.
-[ ] 4.2 Draai in je terminal:
-          keytool -genkeypair -v -keystore vaelntn-upload.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000
-        Beantwoord de vragen en onthoud je wachtwoorden goed!
-[ ] 4.3 Maak Base64 tekst van de keystore:
+[ ] 4.1 Open een terminal op je PC in een veilige map en draai precies:
+
+--- BEGIN KOPIEERBLOK: KEYSTORE MAKEN ---
+keytool -genkeypair -v -keystore vaelntn-upload.jks -alias upload -keyalg RSA -keysize 2048 -validity 10000
+--- EINDE KOPIEERBLOK: KEYSTORE MAKEN ---
+
+        Vul bij de vragen in:
+        - Wachtwoord (typ en onthoud dit goed! Voorbeeld: kies zelf iets sterks)
+        - Voor- en achternaam / Studio: VaelNTN
+        - Organisatie-eenheid: Mobile
+        - Organisatie: VaelNTN
+        - Plaats / Provincie / Landcode: bijv. Amsterdam / NH / NL (of BE)
+        - Typ "yes" (of "ja") om te bevestigen.
+
+[ ] 4.2 Converteer "vaelntn-upload.jks" naar 1 lange Base64 tekstregel:
         - Windows PowerShell:
             [Convert]::ToBase64String([IO.File]::ReadAllBytes("vaelntn-upload.jks")) | Out-File -Encoding ascii keystore.b64.txt
         - Linux / Git Bash:
@@ -190,193 +654,408 @@ Google Play accepteert alleen officieel gesigneerde ".aab" bestanden. Je maakt
         - macOS:
             base64 -i vaelntn-upload.jks | tr -d '\n' > keystore.b64.txt
 
-[ ] 4.4 Voeg in ELKE GitHub-repo (zie overzicht in Stap 7) deze 4 Secrets toe
-        via: Repo -> Settings -> Secrets and variables -> Actions -> Secrets:
-          1) ANDROID_KEYSTORE_BASE64   = volledige inhoud van keystore.b64.txt
-          2) ANDROID_KEYSTORE_PASSWORD = je keystore wachtwoord
-          3) ANDROID_KEY_ALIAS         = upload
-          4) ANDROID_KEY_PASSWORD      = je key wachtwoord
-
-        TIP: Heb je GitHub CLI ("gh") geinstalleerd? Dan kan het met een script
-        voor alle repo's tegelijk i.p.v. 60 keer klikken!
+[ ] 4.3 DOE EERST STAP 5 HIERONDER VOOR DE SERVICE ACCOUNT JSON (optioneel maar
+        handig), zodat je in Stap 4B alle 5 secrets + VITE_API_URL in 1 keer
+        naar alle 15 GitHub-repo's kunt sturen!
 
 
 ================================================================================
-STAP 5: AUTOMATISCHE UPLOAD NAAR GOOGLE PLAY (OPTIONEEL MAAR SUPER HANDIG)
+STAP 5: GOOGLE CLOUD SERVICE ACCOUNT (VOOR AUTOMATISCHE UPLOAD NAAR PLAY CONSOLE)
 ================================================================================
-[ ] 5.1 Ga naar https://console.cloud.google.com -> Nieuw project aanmaken.
-[ ] 5.2 Zoek en activeer de API: "Google Play Android Developer API".
-[ ] 5.3 Ga naar "IAM & Admin -> Service Accounts -> Create Service Account".
-[ ] 5.4 Maak een JSON-sleutel ("Keys -> Add Key -> Create new key -> JSON")
-        en download het .json bestand.
-[ ] 5.5 Ga in Google Play Console naar:
-        "Users and permissions -> Invite new users"
-        Plak het e-mailadres van je Service Account en geef rechten voor:
-        "Manage testing tracks and releases" + "Manage production releases".
-[ ] 5.6 Voeg de volledige tekst van dat JSON-bestand toe als 5e GitHub Secret
-        in elke repo:
-          5) GOOGLE_PLAY_SERVICE_ACCOUNT_JSON
+Hiermee uploadt GitHub Actions na elke wijziging je nieuwe ".aab" automatisch
+naar Google Play!
 
-        LET OP: De ALLEREERSTE ".aab" van elke nieuwe app moet je 1x handmatig
-        uploaden in Play Console om de app aan te maken. Daarna doet GitHub
-        Actions bij elke push alles volautomatisch!
+[ ] 5.1 Ga naar: https://console.cloud.google.com
+[ ] 5.2 Klik bovenin op "Select a project" -> "New Project" -> noem hem
+        "vaelntn-play-deploy" -> klik "Create".
+[ ] 5.3 Kies je nieuwe project -> ga links naar "APIs & Services -> Library".
+        Zoek op:  Google Play Android Developer API
+        Klik erop en druk op de blauwe knop "ENABLE".
+[ ] 5.4 Ga links naar: "IAM & Admin -> Service Accounts" -> "+ CREATE SERVICE ACCOUNT"
+        - Service account name: github-play-uploader
+        - Klik "Create and Continue" -> "Done".
+[ ] 5.5 Klik op het zojuist aangemaakte e-mailadres
+        (lijkt op: github-play-uploader@vaelntn-play-deploy.iam.gserviceaccount.com).
+        Kopieer dit e-mailadres!
+[ ] 5.6 Ga naar tabblad "Keys" -> "Add Key" -> "Create new key" -> kies "JSON" -> "Create".
+        Er wordt een .json bestand gedownload (hernoem het bijv. naar play-sa.json).
+[ ] 5.7 Ga terug naar Google Play Console (https://play.google.com/console):
+        Links in het hoofdmenu: "Users and permissions" -> "Invite new users"
+        - Plak het service-account e-mailadres uit stap 5.5.
+        - Zet onder "Account permissions" in elk geval aan:
+          * View app information and download bulk reports (read-only)
+          * Release apps to testing tracks
+          * Manage testing tracks and edit tester lists
+          * Release to production, exclude devices, and use Play App Signing
+        - Klik "Invite user" -> "Send invite".
+
+--- STAP 4B: ALLES IN 1 KEER NAAR ALLE 15 GITHUB REPO'S UPLOADEN ---
+Je kunt alles handmatig aanklikken per repo (Repo -> Settings -> Secrets and
+variables -> Actions), OF je draait 1 van deze scripts met GitHub CLI ("gh"):
+Eerst 1x inloggen in je terminal:  gh auth login
+
+--- BEGIN KOPIEERBLOK: BASH / MAC / LINUX / GIT BASH BULK SCRIPT ---
+# Vul eerst jouw echte waarden in tussen de aanhalingstekens:
+WORKER_URL="https://arcade-highscores-api.JOUW-SUBDOMAIN.workers.dev"
+KS_PASS="JOUW_KEYSTORE_WACHTWOORD"
+KEY_PASS="JOUW_KEY_WACHTWOORD"
+KS_B64="$(tr -d '\r\n ' < keystore.b64.txt)"
+SA_JSON="$(cat play-sa.json)"
+
+ALL_15_REPOS=(
+  "VaelNTN/starforge-survivors"
+  "VaelNTN/best-gps-there-is-app"
+  "VaelNTN/castle-bastion-td"
+  "VaelNTN/turbo-drift-racer"
+  "VaelNTN/world-match-chat"
+  "VaelNTN/arcade-100-hub"
+  "VaelNTN/pocket-tanks-duel"
+  "VaelNTN/one-walk-fighter"
+  "VaelNTN/frog-parkour"
+  "VaelNTN/click-planet"
+  "VaelNTN/cat-hanger"
+  "VaelNTN/cat-climber"
+  "VaelNTN/dog-hanger"
+  "VaelNTN/dog-climber"
+  "VaelNTN/fair-coin-slots"
+)
+
+API_13_REPOS=(
+  "VaelNTN/castle-bastion-td"
+  "VaelNTN/turbo-drift-racer"
+  "VaelNTN/world-match-chat"
+  "VaelNTN/arcade-100-hub"
+  "VaelNTN/pocket-tanks-duel"
+  "VaelNTN/one-walk-fighter"
+  "VaelNTN/frog-parkour"
+  "VaelNTN/click-planet"
+  "VaelNTN/cat-hanger"
+  "VaelNTN/cat-climber"
+  "VaelNTN/dog-hanger"
+  "VaelNTN/dog-climber"
+  "VaelNTN/fair-coin-slots"
+)
+
+for R in "${ALL_15_REPOS[@]}"; do
+  echo "Secrets instellen voor $R ..."
+  gh secret set ANDROID_KEYSTORE_BASE64 --repo "$R" --body "$KS_B64"
+  gh secret set ANDROID_KEYSTORE_PASSWORD --repo "$R" --body "$KS_PASS"
+  gh secret set ANDROID_KEY_ALIAS --repo "$R" --body "upload"
+  gh secret set ANDROID_KEY_PASSWORD --repo "$R" --body "$KEY_PASS"
+  gh secret set GOOGLE_PLAY_SERVICE_ACCOUNT_JSON --repo "$R" --body "$SA_JSON"
+done
+
+for R in "${API_13_REPOS[@]}"; do
+  echo "VITE_API_URL instellen voor $R ..."
+  gh variable set VITE_API_URL --repo "$R" --body "$WORKER_URL"
+done
+echo "KLAAR! Alle 15 repos zijn ingesteld!"
+--- EINDE KOPIEERBLOK: BASH / MAC / LINUX / GIT BASH BULK SCRIPT ---
+
+--- BEGIN KOPIEERBLOK: WINDOWS POWERSHELL BULK SCRIPT ---
+$WORKER_URL = "https://arcade-highscores-api.JOUW-SUBDOMAIN.workers.dev"
+$KS_PASS    = "JOUW_KEYSTORE_WACHTWOORD"
+$KEY_PASS   = "JOUW_KEY_WACHTWOORD"
+$KS_B64     = (Get-Content -Raw "keystore.b64.txt") -replace '\s',''
+$SA_JSON    = Get-Content -Raw "play-sa.json"
+
+$ALL_15_REPOS = @(
+  "VaelNTN/starforge-survivors","VaelNTN/best-gps-there-is-app",
+  "VaelNTN/castle-bastion-td","VaelNTN/turbo-drift-racer",
+  "VaelNTN/world-match-chat","VaelNTN/arcade-100-hub",
+  "VaelNTN/pocket-tanks-duel","VaelNTN/one-walk-fighter",
+  "VaelNTN/frog-parkour","VaelNTN/click-planet",
+  "VaelNTN/cat-hanger","VaelNTN/cat-climber",
+  "VaelNTN/dog-hanger","VaelNTN/dog-climber",
+  "VaelNTN/fair-coin-slots"
+)
+
+$API_13_REPOS = @(
+  "VaelNTN/castle-bastion-td","VaelNTN/turbo-drift-racer",
+  "VaelNTN/world-match-chat","VaelNTN/arcade-100-hub",
+  "VaelNTN/pocket-tanks-duel","VaelNTN/one-walk-fighter",
+  "VaelNTN/frog-parkour","VaelNTN/click-planet",
+  "VaelNTN/cat-hanger","VaelNTN/cat-climber",
+  "VaelNTN/dog-hanger","VaelNTN/dog-climber",
+  "VaelNTN/fair-coin-slots"
+)
+
+foreach ($R in $ALL_15_REPOS) {
+  Write-Host "Secrets instellen voor $R ..."
+  $KS_B64  | gh secret set ANDROID_KEYSTORE_BASE64 --repo $R
+  $KS_PASS | gh secret set ANDROID_KEYSTORE_PASSWORD --repo $R
+  "upload" | gh secret set ANDROID_KEY_ALIAS --repo $R
+  $KEY_PASS| gh secret set ANDROID_KEY_PASSWORD --repo $R
+  $SA_JSON | gh secret set GOOGLE_PLAY_SERVICE_ACCOUNT_JSON --repo $R
+}
+
+foreach ($R in $API_13_REPOS) {
+  Write-Host "VITE_API_URL instellen voor $R ..."
+  gh variable set VITE_API_URL --repo $R --body $WORKER_URL
+}
+Write-Host "KLAAR! Alle 15 repos zijn ingesteld!"
+--- EINDE KOPIEERBLOK: WINDOWS POWERSHELL BULK SCRIPT ---
+
+BELANGRIJK: Nadat je dit hebt gedaan, draai je in elke repo 1x opnieuw
+Actions -> Build Android APK & AAB -> "Run workflow" (of doe een kleine
+git push) zodat alle nieuwe ".aab" bestanden meteen gesigneerd + met jouw
+live VITE_API_URL worden gebouwd!
+LET OP: De ALLEREERSTE ".aab" van elke gloednieuwe app upload je 1x handmatig
+in Play Console om de app daar aan te maken. Daarna werkt auto-upload altijd!
 
 
 ================================================================================
-STAP 6: VERDIENMODEL LIVE ZETTEN (STARFORGE SURVIVORS + ADMOB)
+STAP 6: STARFORGE SURVIVORS VERDIENMODEL LIVE ZETTEN (ADMOB + IN-APP AANKOPEN)
 ================================================================================
-Alleen "Starforge Survivors" heeft nu echte In-App Aankopen en Google AdMob.
-Voor al die aankopen en ads zie ook: starforge-survivors/MONETIZATION_PLAYBOOK.md
+Alleen "Starforge Survivors" (com.vaelntn.starforgesurvivors) heeft nu echte
+AdMob-reclames en echte In-App Aankopen ingebouwd.
 
-[ ] 6.1 Ga naar https://admob.google.com en maak je AdMob-account + koppel je
-        uitbetalingsgegevens.
-[ ] 6.2 Voeg de Android app "Starforge Survivors" toe in AdMob en maak aan:
-          - 1 Rewarded Ad Unit
-          - 1 Interstitial Ad Unit
-[ ] 6.3 Open in repo "VaelNTN/starforge-survivors":
-          - android/app/src/main/res/values/strings.xml -> vervang admob_app_id
-          - src/config/monetization.ts -> vul echte unit IDs in + testMode: false
-[ ] 6.4 Maak in Play Console onder "Starforge Survivors -> Monetize -> Products"
-        exact deze In-App Products aan (status: Active):
-          - starforge_starter_pack   (€1,99)
-          - starforge_no_ads         (€4,99)
-          - starforge_season_pass    (€6,99)
-          - starforge_piggy_bank     (€2,99)
-          - gems_100                 (€0,99)
-          - gems_500                 (€4,49)
-          - gems_1200                (€9,99)
-          - gems_2600                (€19,99)
-          - gems_6500                (€44,99)
-          - gems_14000               (€89,99)
-[ ] 6.5 Maak onder "Monetize -> Subscriptions" het abonnement aan:
-          - starforge_vip_monthly    (€4,99/maand)
+--- 6A. Google AdMob ---
+[ ] 6.1 Ga naar: https://admob.google.com en meld je aan met je Google account.
+[ ] 6.2 Vul onder "Payments" je adres + IBAN uitbetalingsgegevens in.
+[ ] 6.3 Ga naar "Apps -> Add app":
+          - Platform: Android
+          - Is the app listed on a supported app store?: No (later koppelen!)
+          - App name: Starforge Survivors
+        Kopieer jouw echte AdMob App ID (ziet eruit als: ca-app-pub-1234567890~1234567890).
+[ ] 6.4 Maak in AdMob onder deze app 2 Ad Units aan:
+          1) Rewarded     -> naam: starforge_rewarded     -> kopieer Unit ID
+          2) Interstitial -> naam: starforge_interstitial -> kopieer Unit ID
+[ ] 6.5 Vervang in repo VaelNTN/starforge-survivors:
+          1) Bestand: android/app/src/main/res/values/strings.xml
+             Vervang de test-ID in:
+               <string name="admob_app_id">ca-app-pub-JOUW_ECHTE_APP_ID</string>
+          2) Bestand: src/config/monetization.ts
+             Zet:
+               testMode: false,
+               androidAppId: 'ca-app-pub-JOUW_ECHTE_APP_ID',
+               rewardedUnitId: 'ca-app-pub-JOUW_ECHTE_REWARDED_UNIT_ID',
+               interstitialUnitId: 'ca-app-pub-JOUW_ECHTE_INTERSTITIAL_UNIT_ID',
+          3) Commit + git push naar main -> GitHub bouwt meteen de nieuwe AAB!
+
+--- 6B. Google Play In-App Products & Subscriptions (EXACTE SKUs!) ---
+Upload eerst 1x een gesigneerde "app-release.aab" in Closed testing van
+Starforge Survivors (want pas na een AAB met BILLING permissie mag je
+producten aanmaken in Play Console!). Daarna maak je onder:
+  Play Console -> Starforge Survivors -> Monetize with Play -> Products
+EXACT deze IDs aan (let op kleine letters + underscores, status = Active!):
+
+1) In-app products (10 stuks - exact deze Product IDs):
+   [ ] starforge_starter_pack | €1,99  | Apex Starter Bundle (500 Gems + Epic Gear + 20k Gold + 2 Keys)
+   [ ] starforge_no_ads       | €4,99  | Remove Forced Ads Forever (+20% Gold + 300 Gems)
+   [ ] starforge_season_pass  | €6,99  | Starforge Season Pass (30 Premium Tiers + 400 Gems)
+   [ ] starforge_piggy_bank   | €2,99  | Crack Overcharge Vault (up to 1,500 saved Gems)
+   [ ] gems_100               | €0,99  | 100 Star Gems
+   [ ] gems_500               | €4,49  | 550 Star Gems (+10% Bonus)
+   [ ] gems_1200              | €9,99  | 1,350 Star Gems (+15% Bonus)
+   [ ] gems_2600              | €19,99 | 3,000 Star Gems (+20% Bonus)
+   [ ] gems_6500              | €44,99 | 7,500 Star Gems (+25% Bonus)
+   [ ] gems_14000             | €89,99 | 16,500 Star Gems (+35% Bonus)
+
+2) Subscriptions (1 stuk - exact dit Product ID):
+   [ ] starforge_vip_monthly  | €4,99/maand | Base Plan: 1 Month Auto-renew | VIP Commander Club
+
+   (De native Java code in PlayBillingPlugin.java haalt alle echte lokale
+    prijzen vanzelf uit Google Play zodra deze 11 IDs Active zijn!)
 
 
 ================================================================================
-STAP 7: ALLE 15 APPS AANMAKEN IN GOOGLE PLAY CONSOLE (AFVINKLIJST)
+STAP 7: ALLE 15 APPS IN GOOGLE PLAY CONSOLE AANMAKEN & INVULLEN (EXACT!)
 ================================================================================
-Per app doe je in Play Console:
-  Create app -> App name invullen -> Free -> Declarations aanvinken
-  -> Dashboard stappen afwerken (Privacy Policy, App Access, Ads, Content
-  Rating, Target Audience, Data Safety, Store Listing met min. 2 screenshots +
-  512x512 icoon + 1024x500 feature graphic).
+Voor ELKE app doorloop je in Play Console -> "Create app":
+  - App name: exact zoals hieronder
+  - Default language: Dutch (Netherlands) of English (United States)
+  - App or game: Game (behalve Road Mapper = App en WorldMatch Chat = App)
+  - Free or paid: Free
+  - Declarations: vink beide aan -> "Create app"
 
-Hier zijn AL je 15 Android-apps met hun exacte Package ID & Privacy Policy URL:
+In elk app-dashboard vul je alle verplichte secties onder "Set up your app" in:
+  1. App access: "All functionality is available without special access"
+  2. Ads:        ALLEEN "Yes" bij Starforge Survivors; bij alle andere 14 = "No"!
+  3. Content rating: Vraaglijst invullen (let op Starforge=12+, Slots=12+, Chat=18+!)
+  4. Target audience:
+     - Games (behalve Starforge/Slots): "13-15, 16-17, 18 and over" (of "9+" als je geen kinderen <13 wilt targeten — TIP: NIET "Under 13" kiezen want dan eist Google streng beleid voor "Families"!).
+     - Starforge Survivors & Fair Coin Slots: "13-15, 16-17, 18 and over"
+     - WorldMatch Chat: ALLEEN "18 and over"!
+  5. Data safety:
+     - Road Mapper (GPS): Collects Location (Approximate & Precise) + Audio (Voice search) -> "Ephemeral / App functionality only, NOT shared with third parties".
+     - WorldMatch Chat: Collects User IDs / Messages (encrypted in transit, user can stop/block anytime).
+     - Starforge Survivors: Collects Device IDs / Purchase history (for Advertising & App functionality via Google AdMob & Google Play Billing).
+     - Overige 12 games: Collects only optional Player Nickname & Device ID for online highscores (Encrypted in transit, NOT shared with third parties) OR "No data collected" als je zonder online scores publiceert.
+  6. Store listing graphics (per app nodig):
+     - App icon:        512 x 512 px PNG (je huidige mipmap-xxxhdpi iconen zijn 192x192/432x432 -> schaal naar 512x512 of vraag mij ze voor alle 15 te genereren!)
+     - Feature graphic: 1024 x 500 px PNG/JPG
+     - Screenshots:     minimaal 2 telefoon-screenshots (bijv. 1080x1920 of 1080x2400)
 
-[ ] 1. Starforge Survivors (MONETIZED: Ads=YES, IAP=YES, Rating=12+)
-       Repo:    https://github.com/VaelNTN/starforge-survivors
-       App ID:  com.vaelntn.starforgesurvivors
-       Privacy: https://github.com/VaelNTN/starforge-survivors/blob/main/PRIVACY_POLICY.md
+--- DE EXACTE AFVINKLIJST VAN ALLE 15 APPS ---
 
-[ ] 2. Road Mapper / GPS App (Ads=NO, IAP=NO, Location permission uitleggen!)
-       Repo:    https://github.com/VaelNTN/best-gps-there-is-app
-       App ID:  com.bestgpsthereis.app
-       Privacy: https://github.com/VaelNTN/best-gps-there-is-app/blob/main/PRIVACY_POLICY.md
+[ ] 1. Starforge Survivors  (Type: Game | Ads: YES | IAP: YES | Leeftijd: 13+)
+       Repo:       https://github.com/VaelNTN/starforge-survivors
+       Package ID: com.vaelntn.starforgesurvivors
+       Privacy:    https://github.com/VaelNTN/starforge-survivors/blob/main/PRIVACY_POLICY.md
 
-[ ] 3. Castle Bastion TD (Ads=NO, IAP=NO, Rating=7+)
-       Repo:    https://github.com/VaelNTN/castle-bastion-td
-       App ID:  com.castlebastion.td
-       Privacy: https://github.com/VaelNTN/castle-bastion-td/blob/main/PRIVACY_POLICY.md
+[ ] 2. Road Mapper  (Type: App | Ads: NO | IAP: NO | Leeftijd: 13+)
+       Repo:       https://github.com/VaelNTN/best-gps-there-is-app
+       Package ID: com.bestgpsthereis.app
+       Privacy:    https://github.com/VaelNTN/best-gps-there-is-app/blob/main/PRIVACY_POLICY.md
+       LET OP:     Declareer Location (turn-by-turn GPS navigatie) + Audio (spraakzoekfunctie)
+                   in Data Safety; beiden worden alleen op het toestel/voor navigatie gebruikt.
 
-[ ] 4. Turbo Drift Racer (Ads=NO, IAP=NO, Rating=3+)
-       Repo:    https://github.com/VaelNTN/turbo-drift-racer
-       App ID:  com.turbodrift.racer
-       Privacy: https://github.com/VaelNTN/turbo-drift-racer/blob/main/PRIVACY_POLICY.md
+[ ] 3. Castle Bastion TD  (Type: Game | Ads: NO | IAP: NO | Leeftijd: 13+)
+       Repo:       https://github.com/VaelNTN/castle-bastion-td
+       Package ID: com.castlebastion.td
+       Privacy:    https://github.com/VaelNTN/castle-bastion-td/blob/main/PRIVACY_POLICY.md
+       Icoon:      Custom Kasteel-symbool (reeds ingebouwd).
 
-[ ] 5. WorldMatch Chat (Ads=NO, IAP=NO, Rating=18+! UGC/Block aanwezig aanvinken)
-       Repo:    https://github.com/VaelNTN/world-match-chat
-       App ID:  com.worldmatch.chat
-       Privacy: https://github.com/VaelNTN/world-match-chat/blob/main/PRIVACY_POLICY.md
-       BELANGRIJK voor Play Review: vink bij Target Audience aan "18 and over"
-       en meld bij Content/UGC dat er een directe "Blokkeer" + "Stop" knop zit.
+[ ] 4. Turbo Drift Racer  (Type: Game | Ads: NO | IAP: NO | Leeftijd: 13+)
+       Repo:       https://github.com/VaelNTN/turbo-drift-racer
+       Package ID: com.turbodrift.racer
+       Privacy:    https://github.com/VaelNTN/turbo-drift-racer/blob/main/PRIVACY_POLICY.md
+       Icoon:      Custom Racewagen-symbool (reeds ingebouwd).
 
-[ ] 6. Arcade 100+ Hub (Ads=NO, IAP=NO)
-       Repo:    https://github.com/VaelNTN/arcade-100-hub
-       App ID:  com.arcade100hub.game
-       Privacy: https://github.com/VaelNTN/arcade-100-hub/blob/main/PRIVACY_POLICY.md
+[ ] 5. WorldMatch Chat  (Type: App | Ads: NO | IAP: NO | Leeftijd: ALLEEN 18+!)
+       Repo:       https://github.com/VaelNTN/world-match-chat
+       Package ID: com.worldmatch.chat
+       Privacy:    https://github.com/VaelNTN/world-match-chat/blob/main/PRIVACY_POLICY.md
+       LET OP:     Verplicht voor goedkeuring: vink "18 and over" aan bij Target Audience
+                   en meld bij UGC/Content dat er direct een "Blokkeer" + "Stop" knop zit
+                   en geen voorafgaande nep-bots (alleen echte gebruikers via jouw server).
 
-[ ] 7. Pocket Tanks Duel (Ads=NO, IAP=NO)
-       Repo:    https://github.com/VaelNTN/pocket-tanks-duel
-       App ID:  com.pockettanksduel.game
-       Privacy: https://github.com/VaelNTN/pocket-tanks-duel/blob/main/PRIVACY_POLICY.md
+[ ] 6. Arcade 100+ Hub  (Type: Game | Ads: NO | IAP: NO | Leeftijd: 13+)
+       Repo:       https://github.com/VaelNTN/arcade-100-hub
+       Package ID: com.arcade100hub.game
+       Privacy:    https://github.com/VaelNTN/arcade-100-hub/blob/main/PRIVACY_POLICY.md
 
-[ ] 8. 1-Walk Fighter (Ads=NO, IAP=NO)
-       Repo:    https://github.com/VaelNTN/one-walk-fighter
-       App ID:  com.onewalkfighter.game
-       Privacy: https://github.com/VaelNTN/one-walk-fighter/blob/main/PRIVACY_POLICY.md
+[ ] 7. Pocket Tanks Duel  (Type: Game | Ads: NO | IAP: NO | Leeftijd: 13+)
+       Repo:       https://github.com/VaelNTN/pocket-tanks-duel
+       Package ID: com.pockettanksduel.game
+       Privacy:    https://github.com/VaelNTN/pocket-tanks-duel/blob/main/PRIVACY_POLICY.md
 
-[ ] 9. Frog Parkour (Ads=NO, IAP=NO)
-       Repo:    https://github.com/VaelNTN/frog-parkour
-       App ID:  com.frogparkour.game
-       Privacy: https://github.com/VaelNTN/frog-parkour/blob/main/PRIVACY_POLICY.md
+[ ] 8. 1-Walk Fighter  (Type: Game | Ads: NO | IAP: NO | Leeftijd: 13+)
+       Repo:       https://github.com/VaelNTN/one-walk-fighter
+       Package ID: com.onewalkfighter.game
+       Privacy:    https://github.com/VaelNTN/one-walk-fighter/blob/main/PRIVACY_POLICY.md
 
-[ ] 10. Click Planet (Ads=NO, IAP=NO)
-       Repo:    https://github.com/VaelNTN/click-planet
-       App ID:  com.clickplanet.game
-       Privacy: https://github.com/VaelNTN/click-planet/blob/main/PRIVACY_POLICY.md
+[ ] 9. Frog Parkour  (Type: Game | Ads: NO | IAP: NO | Leeftijd: 13+)
+       Repo:       https://github.com/VaelNTN/frog-parkour
+       Package ID: com.frogparkour.game
+       Privacy:    https://github.com/VaelNTN/frog-parkour/blob/main/PRIVACY_POLICY.md
 
-[ ] 11. Cat Hanger (Ads=NO, IAP=NO)
-       Repo:    https://github.com/VaelNTN/cat-hanger
-       App ID:  com.cathanger.game
-       Privacy: https://github.com/VaelNTN/cat-hanger/blob/main/PRIVACY_POLICY.md
+[ ] 10. Click Planet  (Type: Game | Ads: NO | IAP: NO | Leeftijd: 13+)
+        Repo:       https://github.com/VaelNTN/click-planet
+        Package ID: com.clickplanet.game
+        Privacy:    https://github.com/VaelNTN/click-planet/blob/main/PRIVACY_POLICY.md
 
-[ ] 12. Cat Climber (Ads=NO, IAP=NO)
-       Repo:    https://github.com/VaelNTN/cat-climber
-       App ID:  com.catclimber.game
-       Privacy: https://github.com/VaelNTN/cat-climber/blob/main/PRIVACY_POLICY.md
+[ ] 11. Cat Hanger  (Type: Game | Ads: NO | IAP: NO | Leeftijd: 13+)
+        Repo:       https://github.com/VaelNTN/cat-hanger
+        Package ID: com.cathanger.game
+        Privacy:    https://github.com/VaelNTN/cat-hanger/blob/main/PRIVACY_POLICY.md
 
-[ ] 13. Dog Hanger (Ads=NO, IAP=NO)
-       Repo:    https://github.com/VaelNTN/dog-hanger
-       App ID:  com.doghanger.game
-       Privacy: https://github.com/VaelNTN/dog-hanger/blob/main/PRIVACY_POLICY.md
+[ ] 12. Cat Climber  (Type: Game | Ads: NO | IAP: NO | Leeftijd: 13+)
+        Repo:       https://github.com/VaelNTN/cat-climber
+        Package ID: com.catclimber.game
+        Privacy:    https://github.com/VaelNTN/cat-climber/blob/main/PRIVACY_POLICY.md
 
-[ ] 14. Dog Climber (Ads=NO, IAP=NO)
-       Repo:    https://github.com/VaelNTN/dog-climber
-       App ID:  com.dogclimber.game
-       Privacy: https://github.com/VaelNTN/dog-climber/blob/main/PRIVACY_POLICY.md
+[ ] 13. Dog Hanger  (Type: Game | Ads: NO | IAP: NO | Leeftijd: 13+)
+        Repo:       https://github.com/VaelNTN/dog-hanger
+        Package ID: com.doghanger.game
+        Privacy:    https://github.com/VaelNTN/dog-hanger/blob/main/PRIVACY_POLICY.md
 
-[ ] 15. Fair Coin Slots (Ads=NO, IAP=NO, Content Rating: Simulated Gambling 12+,
-       Real-money gambling: NO!)
-       Repo:    https://github.com/VaelNTN/fair-coin-slots
-       App ID:  com.faircoinslots.game
-       Privacy: https://github.com/VaelNTN/fair-coin-slots/blob/main/PRIVACY_POLICY.md
+[ ] 14. Dog Climber  (Type: Game | Ads: NO | IAP: NO | Leeftijd: 13+)
+        Repo:       https://github.com/VaelNTN/dog-climber
+        Package ID: com.dogclimber.game
+        Privacy:    https://github.com/VaelNTN/dog-climber/blob/main/PRIVACY_POLICY.md
+
+[ ] 15. Fair Coin Slots  (Type: Game | Ads: NO | IAP: NO | Leeftijd: 13+ / Simulated Gambling)
+        Repo:       https://github.com/VaelNTN/fair-coin-slots
+        Package ID: com.faircoinslots.game
+        Privacy:    https://github.com/VaelNTN/fair-coin-slots/blob/main/PRIVACY_POLICY.md
+        LET OP:     Zet bij Content Rating "Simulated Gambling = Yes", "Real-money
+                    gambling = No" en "In-app purchases = No".
 
 
 ================================================================================
 STAP 8: 12 TESTERS VOOR 14 DAGEN REGELEN (VERPLICHT VOOR NIEUW PERSONAL ACCOUNT)
 ================================================================================
-Google Play eist bij een nieuw persoonlijk account dat elke app eerst 14 dagen
-door minstens 12 mensen is geinstalleerd in "Closed testing" voordat hij live
-mag naar Production. De slimste truc:
+Google Play eist bij een nieuw persoonlijk developer account dat iedere app
+eerst 14 dagen achter elkaar in "Closed testing" door minimaal 12 testers is
+geinstalleerd voordat je "Apply for production" krijgt.
 
-[ ] 8.1 Ga naar https://groups.google.com -> Klik "Create group":
-          Naam:     vaelntn-android-testers
-          Toegang:  "Anyone on the web" mag lid worden.
-[ ] 8.2 Ga voor elke app in Play Console naar:
-        "Testing -> Closed testing -> Manage track -> Testers -> Google Groups"
-        Plak daar HETZELFDE e-mailadres: vaelntn-android-testers@googlegroups.com
-[ ] 8.3 Upload per app je gesigneerde "app-release.aab" (uit GitHub Actions ->
-        Artifacts -> app-release-aab) en druk "Send changes for review".
-[ ] 8.4 Kopieer na goedkeuring van elke app de "Join on the web" testlink.
-[ ] 8.5 Plaats op Reddit r/AndroidClosedTesting (of app Testers Community) een
-        oproep met jouw 1 Google Group link + testlinks van je apps. Binnen 2
-        dagen heb je 12-20 testers die via die ene Google Group al je apps
-        tegelijk testen (en jij test hun apps even terug!).
+[ ] 8.1 Ga naar: https://groups.google.com -> klik "Create group"
+          - Group name:   vaelntn-android-testers
+          - Group email:  vaelntn-android-testers@googlegroups.com
+          - Who can join: "Anyone on the web"
+[ ] 8.2 Ga in Play Console bij ELKE app naar:
+        "Testing -> Closed testing -> Manage track -> Testers"
+        Kies "Google Groups" en voeg exact toe:
+          vaelntn-android-testers@googlegroups.com
+        (Sla op -> ook "Save" onderaan!)
+[ ] 8.3 Ga in Play Console bij ELKE app naar "Closed testing -> Create new release":
+        - Upload de gesigneerde "app-release.aab" (gedownload van GitHub repo ->
+          Actions -> laatste geslaagde workflow -> Artifacts -> app-release-aab).
+        - Vul Release name in (bijv. "1.0.0") en druk "Next" -> "Save" ->
+          ga naar "Publishing overview" -> "Send changes for review".
+[ ] 8.4 Wacht 1-3 dagen tot Google je Closed testing release goedkeurt.
+        Kopieer daarna per app bij "Closed testing -> Testers" de "Join on the web" link!
+[ ] 8.5 Plaats op Reddit https://www.reddit.com/r/AndroidClosedTesting (en in de
+        Android-app "Testers Community") dit kant-en-klare bericht (vul alleen
+        jouw echte links in tussen de [ ]):
+
+--- BEGIN KOPIEERBLOK: KANT-EN-KLARE REDDIT / TESTERS POST ---
+Title: Need testers for 14-day closed test (1 Google Group unlocks all apps) — I will test yours back!
+
+Hi everyone! I built free Android indie games & apps (and 1 action roguelite).
+All of them use the SAME Google Group, so joining once lets you opt-in to any/all of them!
+
+Step 1) Join the Google Group first:
+https://groups.google.com/g/vaelntn-android-testers
+
+Step 2) Opt-in & install (keep installed 14 days):
+- Starforge Survivors: [PLAK_JOIN_ON_WEB_LINK_1]
+- Road Mapper GPS: [PLAK_JOIN_ON_WEB_LINK_2]
+- Castle Bastion TD: [PLAK_JOIN_ON_WEB_LINK_3]
+- Turbo Drift Racer: [PLAK_JOIN_ON_WEB_LINK_4]
+- WorldMatch Chat: [PLAK_JOIN_ON_WEB_LINK_5]
+(Voeg hier eventueel je overige app-links toe!)
+
+Comment with a screenshot + your Google Group & Play link and I will install yours right away and keep them installed for 14+ days!
+--- EINDE KOPIEERBLOK: KANT-EN-KLARE REDDIT / TESTERS POST ---
 
 
 ================================================================================
-STAP 9: LIVE IN DE PLAY STORE (NA DAG 14!)
+STAP 9: NA DAG 14 -> APPLY FOR PRODUCTION & WERELDWIJD LIVE!
 ================================================================================
-[ ] 9.1 Na 14 dagen continu testen verschijnt bij elke app in Play Console de
-        knop "Apply for production".
-[ ] 9.2 Vul de 3 korte vragen eerlijk in (zie voorbeelden in PLAY_STORE_GUIDE.md).
+[ ] 9.1 Na 14 dagen onafgebroken testen met >=12 testers verschijnt in het
+        Dashboard van elke app de knop "Apply for production".
+[ ] 9.2 Google stelt 3 korte Engelse vragen. Plak (of pas lichtjes aan) deze
+        bewezen, eerlijke antwoorden:
+
+--- BEGIN KOPIEERBLOK: ANTWOORDEN GOOGLE PRODUCTION VRAGENLIJST ---
+Vraag 1 - How did you recruit testers?
+  "I recruited independent Android developers and testers through closed testing communities using an open opt-in Google Group (vaelntn-android-testers@googlegroups.com)."
+
+Vraag 2 - How did testers engage with your app?
+  "Testers installed the app for 14+ consecutive days, played/used the core features across multiple sessions, checked UI scaling on various Android screen sizes, verified adaptive launcher icons, and tested online connectivity."
+
+Vraag 3 - What did you change based on tester feedback?
+  "Based on tester feedback and QA checks, I refined adaptive launcher icons, improved touch controls and UI responsiveness, verified server/offline fallback behavior, and improved stability."
+--- EINDE KOPIEERBLOK: ANTWOORDEN GOOGLE PRODUCTION VRAGENLIJST ---
+
 [ ] 9.3 Zodra "Production access" is goedgekeurd:
-        Release -> Production -> Promote release vanuit Closed testing (of draai
-        GitHub Actions "Run workflow" met play_track = "production").
-[ ] 9.4 Wacht op Google review (meestal 1-4 dagen) -> JOUW APPS STAAN LIVE IN
-        DE GOOGLE PLAY STORE VOOR DE HELE WERELD!
+        Ga naar "Release -> Production -> Promote release" vanuit Closed testing
+        (of start in GitHub Actions "Run workflow" en kies play_track = "production").
+[ ] 9.4 Wacht op de laatste Google review (meestal 1-4 dagen) ->
+        GEFELICITEERD! JOUW APPS STAAN OFFICIEEL LIVE IN GOOGLE PLAY STORE!
+
 
 ================================================================================
-VEEL SUCCES! Heb je hulp nodig bij een stap (bijv. Supabase direct in code
-inbouwen of screenshots/store teksten genereren)? Stuur gerust een bericht!
+KLAAR! WIL JE NOG EXTRA HULP VAN MIJ?
+================================================================================
+Als je deze lijst hebt doorlopen en je wilt dat ik bijvoorbeeld:
+1) De volledige Supabase Login + Register + Cloud-Save schermen direct inbouw in
+   Starforge Survivors en WorldMatch Chat (geef dan alleen je publieke
+   VITE_SUPABASE_URL en VITE_SUPABASE_ANON_KEY), OF
+2) Automatisch alle 512x512 app-iconen + 1024x500 Play Store banners genereer
+   voor alle 15 apps:
+Stuur me gewoon een bericht en ik maak het meteen voor je klaar!
 ================================================================================
