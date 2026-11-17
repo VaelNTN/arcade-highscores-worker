@@ -1807,7 +1807,7 @@ async function handleWorldChat(request: Request, url: URL, env: Env): Promise<Re
     }
 
     if (!chosen) {
-      return jsonResponse({ ok: true, matched: false });
+      return jsonResponse({ ok: true, matched: false, waitingCount: results.length });
     }
 
     const roomId = `wc-${nowMs.toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
