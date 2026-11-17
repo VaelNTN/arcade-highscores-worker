@@ -255,6 +255,38 @@ function ensureSchema(db: D1Database): Promise<void> {
         db.prepare(
           `CREATE INDEX IF NOT EXISTS idx_tdr_room ON turbo_drift_rooms (room_code, track_id, updated_at_ms DESC)`
         ),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS world_chat_queue (
+            device_id TEXT PRIMARY KEY,
+            nickname TEXT NOT NULL,
+            gender TEXT NOT NULL,
+            country_name TEXT NOT NULL,
+            country_flag TEXT NOT NULL,
+            languages_json TEXT NOT NULL,
+            allow_global INTEGER NOT NULL DEFAULT 1,
+            room_id TEXT,
+            partner_json TEXT,
+            status TEXT NOT NULL DEFAULT 'searching',
+            updated_at_ms INTEGER NOT NULL
+          )
+        `),
+        db.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_wc_queue ON world_chat_queue (status, gender, updated_at_ms DESC)`
+        ),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS world_chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_id TEXT NOT NULL,
+            sender_id TEXT NOT NULL,
+            sender_name TEXT NOT NULL,
+            text TEXT NOT NULL,
+            lang TEXT NOT NULL DEFAULT 'en',
+            created_at_ms INTEGER NOT NULL
+          )
+        `),
+        db.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_wc_msg ON world_chat_messages (room_id, created_at_ms ASC)`
+        ),
       ])
       .then(() => undefined)
       .catch((err) => {
@@ -1672,6 +1704,228 @@ async function handleTurboDrift(request: Request, url: URL, env: Env): Promise<R
   return null;
 }
 
+interface WorldChatQueueRow {
+  device_id: string;
+  nickname: string;
+  gender: string;
+  country_name: string;
+  country_flag: string;
+  languages_json: string;
+  allow_global: number;
+  room_id: string | null;
+  partner_json: string | null;
+  status: string;
+  updated_at_ms: number;
+}
+
+interface WorldChatMsgRow {
+  id: number;
+  room_id: string;
+  sender_id: string;
+  sender_name: string;
+  text: string;
+  lang: string;
+  created_at_ms: number;
+}
+
+async function handleWorldChat(request: Request, url: URL, env: Env): Promise<Response | null> {
+  const path = url.pathname;
+
+  if (request.method === 'POST' && path === '/api/world-chat/match') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const deviceId = cleanDeviceId(body?.deviceId);
+    if (!deviceId) return jsonResponse({ ok: false, error: 'INVALID_DEVICE_ID' }, 400);
+
+    const nickname = cleanName(body?.nickname, 'Globetrotter');
+    const gender = body?.gender === 'vrouw' ? 'vrouw' : 'man';
+    const targetGender = gender === 'man' ? 'vrouw' : 'man';
+    const countryName = cleanName(body?.countryName, 'Wereld').slice(0, 32);
+    const countryFlag = typeof body?.countryFlag === 'string' ? body.countryFlag.slice(0, 8) : '🌍';
+    const languages = Array.isArray(body?.languages)
+      ? body.languages.filter((x): x is string => typeof x === 'string').slice(0, 20)
+      : ['en'];
+    const allowGlobal = body?.allowGlobal !== false ? 1 : 0;
+    const nowMs = Date.now();
+    const staleCutoff = nowMs - 20_000;
+
+    await env.DB.prepare(`DELETE FROM world_chat_queue WHERE updated_at_ms < ?`).bind(staleCutoff).run();
+
+    // Check if we were already matched while polling!
+    const existing = await env.DB.prepare(
+      `SELECT * FROM world_chat_queue WHERE device_id = ?`
+    ).bind(deviceId).first<WorldChatQueueRow>();
+
+    if (existing && existing.status === 'matched' && existing.room_id && existing.partner_json) {
+      await env.DB.prepare(`UPDATE world_chat_queue SET updated_at_ms = ? WHERE device_id = ?`)
+        .bind(nowMs, deviceId)
+        .run();
+      return jsonResponse({
+        ok: true,
+        matched: true,
+        roomId: existing.room_id,
+        partner: JSON.parse(existing.partner_json) as unknown,
+      });
+    }
+
+    // Upsert ourselves as searching
+    await env.DB.prepare(
+      `INSERT INTO world_chat_queue (device_id, nickname, gender, country_name, country_flag, languages_json, allow_global, room_id, partner_json, status, updated_at_ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'searching', ?)
+       ON CONFLICT(device_id) DO UPDATE SET
+         nickname = excluded.nickname,
+         gender = excluded.gender,
+         country_name = excluded.country_name,
+         country_flag = excluded.country_flag,
+         languages_json = excluded.languages_json,
+         allow_global = excluded.allow_global,
+         room_id = NULL,
+         partner_json = NULL,
+         status = 'searching',
+         updated_at_ms = excluded.updated_at_ms`
+    ).bind(deviceId, nickname, gender, countryName, countryFlag, JSON.stringify(languages), allowGlobal, nowMs).run();
+
+    const { results } = await env.DB.prepare(
+      `SELECT * FROM world_chat_queue WHERE status = 'searching' AND gender = ? AND device_id != ? AND updated_at_ms >= ? ORDER BY updated_at_ms ASC LIMIT 25`
+    ).bind(targetGender, deviceId, staleCutoff).all<WorldChatQueueRow>();
+
+    let chosen: WorldChatQueueRow | null = null;
+    for (const cand of results) {
+      let candLangs: string[] = [];
+      try {
+        candLangs = JSON.parse(cand.languages_json) as string[];
+      } catch {
+        candLangs = ['en'];
+      }
+      const shared = candLangs.some((l) => languages.includes(l));
+      if (shared) {
+        chosen = cand;
+        break;
+      }
+      if (!chosen && allowGlobal === 1 && cand.allow_global === 1) {
+        chosen = cand;
+      }
+    }
+
+    if (!chosen) {
+      return jsonResponse({ ok: true, matched: false });
+    }
+
+    const roomId = `wc-${nowMs.toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    let chosenLangs: string[] = ['en'];
+    try {
+      chosenLangs = JSON.parse(chosen.languages_json) as string[];
+    } catch {
+      // ignore
+    }
+
+    const partnerForMe = {
+      id: chosen.device_id,
+      nickname: chosen.nickname,
+      gender: chosen.gender,
+      countryName: chosen.country_name,
+      countryFlag: chosen.country_flag,
+      languages: chosenLangs,
+      isRemoteHuman: true,
+      bio: `Live uit ${chosen.country_name}`,
+    };
+    const partnerForOther = {
+      id: deviceId,
+      nickname,
+      gender,
+      countryName,
+      countryFlag,
+      languages,
+      isRemoteHuman: true,
+      bio: `Live uit ${countryName}`,
+    };
+
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE world_chat_queue SET status = 'matched', room_id = ?, partner_json = ?, updated_at_ms = ? WHERE device_id = ?`
+      ).bind(roomId, JSON.stringify(partnerForMe), nowMs, deviceId),
+      env.DB.prepare(
+        `UPDATE world_chat_queue SET status = 'matched', room_id = ?, partner_json = ?, updated_at_ms = ? WHERE device_id = ?`
+      ).bind(roomId, JSON.stringify(partnerForOther), nowMs, chosen.device_id),
+    ]);
+
+    return jsonResponse({
+      ok: true,
+      matched: true,
+      roomId,
+      partner: partnerForMe,
+    });
+  }
+
+  if (request.method === 'POST' && path === '/api/world-chat/send') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const roomId = cleanName(body?.roomId, '').slice(0, 64);
+    const senderId = cleanDeviceId(body?.senderId);
+    const senderName = cleanName(body?.senderName, 'User');
+    const text = typeof body?.text === 'string' ? body.text.trim().slice(0, 600) : '';
+    const lang = cleanName(body?.lang, 'en').slice(0, 8);
+    if (!roomId || !senderId || !text) {
+      return jsonResponse({ ok: false, error: 'INVALID_MESSAGE' }, 400);
+    }
+    const nowMs = Date.now();
+    await env.DB.prepare(
+      `INSERT INTO world_chat_messages (room_id, sender_id, sender_name, text, lang, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)`
+    ).bind(roomId, senderId, senderName, text, lang, nowMs).run();
+    await env.DB.prepare(`UPDATE world_chat_queue SET updated_at_ms = ? WHERE device_id = ?`)
+      .bind(nowMs, senderId)
+      .run();
+    return jsonResponse({ ok: true });
+  }
+
+  if (request.method === 'GET' && path === '/api/world-chat/poll') {
+    const roomId = url.searchParams.get('roomId')?.trim() || '';
+    const deviceId = url.searchParams.get('deviceId')?.trim() || '';
+    const since = Math.max(0, Number(url.searchParams.get('since') || 0));
+    if (!roomId || !deviceId) {
+      return jsonResponse({ ok: false, error: 'MISSING_PARAMS' }, 400);
+    }
+    const nowMs = Date.now();
+    await env.DB.prepare(`UPDATE world_chat_queue SET updated_at_ms = ? WHERE device_id = ?`)
+      .bind(nowMs, deviceId)
+      .run();
+
+    const { results } = await env.DB.prepare(
+      `SELECT id, room_id, sender_id, sender_name, text, lang, created_at_ms
+       FROM world_chat_messages
+       WHERE room_id = ? AND created_at_ms > ?
+       ORDER BY created_at_ms ASC
+       LIMIT 50`
+    ).bind(roomId, since).all<WorldChatMsgRow>();
+
+    const peer = await env.DB.prepare(
+      `SELECT device_id FROM world_chat_queue WHERE room_id = ? AND device_id != ? AND status = 'matched' AND updated_at_ms >= ?`
+    ).bind(roomId, deviceId, nowMs - 20_000).first<{ device_id: string }>();
+
+    return jsonResponse({
+      ok: true,
+      partnerLeft: !peer,
+      messages: results.map((m) => ({
+        id: m.id,
+        senderId: m.sender_id,
+        senderName: m.sender_name,
+        text: m.text,
+        lang: m.lang,
+        createdAtMs: m.created_at_ms,
+      })),
+    });
+  }
+
+  if (request.method === 'POST' && path === '/api/world-chat/leave') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const deviceId = cleanDeviceId(body?.deviceId);
+    if (deviceId) {
+      await env.DB.prepare(`DELETE FROM world_chat_queue WHERE device_id = ?`).bind(deviceId).run();
+    }
+    return jsonResponse({ ok: true });
+  }
+
+  return null;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === 'OPTIONS') {
@@ -1697,6 +1951,7 @@ export default {
           'arcade-hub',
           'castle-bastion',
           'turbo-drift',
+          'world-chat',
         ],
       });
     }
@@ -1738,6 +1993,9 @@ export default {
 
     const td = await handleTurboDrift(request, url, env);
     if (td) return td;
+
+    const wc = await handleWorldChat(request, url, env);
+    if (wc) return wc;
 
     return jsonResponse({ ok: false, error: 'NOT_FOUND' }, 404);
   },

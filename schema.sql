@@ -165,3 +165,30 @@ CREATE TABLE IF NOT EXISTS turbo_drift_rooms (
   PRIMARY KEY (room_code, track_id, device_id)
 );
 CREATE INDEX IF NOT EXISTS idx_tdr_room ON turbo_drift_rooms (room_code, track_id, updated_at_ms DESC);
+
+-- WorldMatch Chat (App 13)
+CREATE TABLE IF NOT EXISTS world_chat_queue (
+  device_id TEXT PRIMARY KEY,
+  nickname TEXT NOT NULL,
+  gender TEXT NOT NULL,
+  country_name TEXT NOT NULL,
+  country_flag TEXT NOT NULL,
+  languages_json TEXT NOT NULL,
+  allow_global INTEGER NOT NULL DEFAULT 1,
+  room_id TEXT,
+  partner_json TEXT,
+  status TEXT NOT NULL DEFAULT 'searching',
+  updated_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_wc_queue ON world_chat_queue (status, gender, updated_at_ms DESC);
+
+CREATE TABLE IF NOT EXISTS world_chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  room_id TEXT NOT NULL,
+  sender_id TEXT NOT NULL,
+  sender_name TEXT NOT NULL,
+  text TEXT NOT NULL,
+  lang TEXT NOT NULL DEFAULT 'en',
+  created_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_wc_msg ON world_chat_messages (room_id, created_at_ms ASC);
