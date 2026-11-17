@@ -131,3 +131,37 @@ CREATE TABLE IF NOT EXISTS arcade_hub_game_scores (
 );
 CREATE INDEX IF NOT EXISTS idx_ahg_score ON arcade_hub_game_scores (game_id, score DESC, updated_at ASC);
 
+-- Castle Bastion TD (App 11)
+CREATE TABLE IF NOT EXISTS castle_bastion_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  wave INTEGER NOT NULL DEFAULT 1,
+  kills INTEGER NOT NULL DEFAULT 0,
+  score INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_cb_score ON castle_bastion_scores (score DESC, wave DESC, updated_at ASC);
+
+-- Turbo Drift Racer (App 12)
+CREATE TABLE IF NOT EXISTS turbo_drift_scores (
+  track_id TEXT NOT NULL,
+  device_id TEXT NOT NULL,
+  player_name TEXT NOT NULL,
+  best_time_ms INTEGER NOT NULL,
+  wins INTEGER NOT NULL DEFAULT 0,
+  car_id INTEGER NOT NULL DEFAULT 0,
+  driver_id INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (track_id, device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tdr_time ON turbo_drift_scores (track_id, best_time_ms ASC, updated_at ASC);
+
+CREATE TABLE IF NOT EXISTS turbo_drift_rooms (
+  room_code TEXT NOT NULL,
+  track_id TEXT NOT NULL,
+  device_id TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  updated_at_ms INTEGER NOT NULL,
+  PRIMARY KEY (room_code, track_id, device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_tdr_room ON turbo_drift_rooms (room_code, track_id, updated_at_ms DESC);
