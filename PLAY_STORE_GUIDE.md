@@ -12,6 +12,12 @@ Alle 4 Android-apps (`click-planet`, `cat-hanger`, `cat-climber`, `fair-coin-slo
 | **Cat Hanger** | `com.cathanger.game` | `https://github.com/VaelNTN/cat-hanger/blob/main/PRIVACY_POLICY.md` |
 | **Cat Climber** | `com.catclimber.game` | `https://github.com/VaelNTN/cat-climber/blob/main/PRIVACY_POLICY.md` |
 | **Fair Coin Slots** | `com.faircoinslots.game` | `https://github.com/VaelNTN/fair-coin-slots/blob/main/PRIVACY_POLICY.md` |
+| **Dog Climber** | `com.dogclimber.game` | `https://github.com/VaelNTN/dog-climber/blob/main/PRIVACY_POLICY.md` |
+| **Dog Hanger** | `com.doghanger.game` | `https://github.com/VaelNTN/dog-hanger/blob/main/PRIVACY_POLICY.md` |
+| **Frog Parkour** | `com.frogparkour.game` | `https://github.com/VaelNTN/frog-parkour/blob/main/PRIVACY_POLICY.md` |
+| **1-Walk Fighter** | `com.onewalkfighter.game` | `https://github.com/VaelNTN/one-walk-fighter/blob/main/PRIVACY_POLICY.md` |
+| **Pocket Tanks Duel** | `com.pockettanksduel.game` | `https://github.com/VaelNTN/pocket-tanks-duel/blob/main/PRIVACY_POLICY.md` |
+| **Arcade 100+ Hub** | `com.arcade100hub.game` | `https://github.com/VaelNTN/arcade-100-hub/blob/main/PRIVACY_POLICY.md` |
 
 > **Belangrijk voor Fair Coin Slots:** Kies in Google Play Console bij **App content -> Content rating** dat het spel **Simulated Gambling** is *zonder* echt-geld transacties (12+ / PEGI 12). Zet **Real-money gambling: No** en **In-app purchases: No**.
 
