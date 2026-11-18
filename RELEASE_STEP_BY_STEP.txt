@@ -331,6 +331,9 @@ CREATE INDEX IF NOT EXISTS idx_wc_msg ON world_chat_messages (room_id, created_a
          Android secrets in ALLE repo's tegelijk zet in 5 seconden!)
         (Let op: "starforge-survivors" en "best-gps-there-is-app" hebben deze
          VITE_API_URL niet nodig.)
+        (TIP voor testen: het handmatige Server/Worker-URL vak is nu netjes
+         verborgen voor gewone spelers — tik 5x achter elkaar op de titel van
+         Leaderboard / Settings om hem als developer handmatig te openen.)
 
 
 ================================================================================
