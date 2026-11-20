@@ -192,3 +192,96 @@ CREATE TABLE IF NOT EXISTS world_chat_messages (
   created_at_ms INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_wc_msg ON world_chat_messages (room_id, created_at_ms ASC);
+
+CREATE TABLE IF NOT EXISTS world_chat_reports (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reporter_id TEXT NOT NULL,
+  reported_id TEXT NOT NULL,
+  room_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  created_at_ms INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_wc_rep ON world_chat_reports (reported_id, created_at_ms DESC);
+
+-- Starforge Survivors (App 14 - Paid Flagship)
+CREATE TABLE IF NOT EXISTS starforge_scores (
+  mode TEXT NOT NULL,
+  device_id TEXT NOT NULL,
+  player_name TEXT NOT NULL,
+  score INTEGER NOT NULL DEFAULT 0,
+  wave INTEGER NOT NULL DEFAULT 1,
+  kills INTEGER NOT NULL DEFAULT 0,
+  hero_id TEXT NOT NULL DEFAULT 'kael',
+  ascension INTEGER NOT NULL DEFAULT 1,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (mode, device_id)
+);
+CREATE INDEX IF NOT EXISTS idx_sf_score ON starforge_scores (mode, score DESC, wave DESC, updated_at ASC);
+
+-- Fish Eater (App 15)
+CREATE TABLE IF NOT EXISTS fish_eater_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  fish_eaten INTEGER NOT NULL DEFAULT 0,
+  max_size_cm INTEGER NOT NULL DEFAULT 10,
+  best_rank INTEGER NOT NULL DEFAULT 1,
+  skin_id TEXT NOT NULL DEFAULT 'ruby',
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fe_score ON fish_eater_scores (fish_eaten DESC, max_size_cm DESC, updated_at ASC);
+
+-- Apex Underground (App 16)
+CREATE TABLE IF NOT EXISTS apex_underground_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  score INTEGER NOT NULL DEFAULT 0,
+  best_mode TEXT NOT NULL DEFAULT 'sprint',
+  car_name TEXT NOT NULL DEFAULT 'Starter',
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_au_score ON apex_underground_scores (score DESC, updated_at ASC);
+
+-- Critter Kart GP (App 17)
+CREATE TABLE IF NOT EXISTS critter_kart_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  score INTEGER NOT NULL DEFAULT 0,
+  trophies INTEGER NOT NULL DEFAULT 0,
+  driver_name TEXT NOT NULL DEFAULT 'Pip',
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ck_score ON critter_kart_scores (score DESC, trophies DESC, updated_at ASC);
+
+-- Dune Baja Rally (App 18)
+CREATE TABLE IF NOT EXISTS dune_baja_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  best_meters INTEGER NOT NULL DEFAULT 0,
+  total_flips INTEGER NOT NULL DEFAULT 0,
+  vehicle_name TEXT NOT NULL DEFAULT 'Sandhopper',
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_db_score ON dune_baja_scores (best_meters DESC, total_flips DESC, updated_at ASC);
+
+-- SkyCommand 3D (App 19)
+CREATE TABLE IF NOT EXISTS skycommand_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  score INTEGER NOT NULL DEFAULT 0,
+  best_fpm INTEGER NOT NULL DEFAULT 999,
+  aircraft_name TEXT NOT NULL DEFAULT 'Talon X-22',
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sc_score ON skycommand_scores (score DESC, best_fpm ASC, updated_at ASC);
+
+-- AI VIRUSWORLD (App 20)
+CREATE TABLE IF NOT EXISTS ai_virusworld_scores (
+  device_id TEXT PRIMARY KEY,
+  player_name TEXT NOT NULL,
+  score INTEGER NOT NULL DEFAULT 0,
+  turns INTEGER NOT NULL DEFAULT 1,
+  difficulty TEXT NOT NULL DEFAULT 'easy',
+  faction_name TEXT NOT NULL DEFAULT 'GeePeeTy',
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_av_score ON ai_virusworld_scores (score DESC, turns ASC, updated_at ASC);

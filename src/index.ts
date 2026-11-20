@@ -287,6 +287,116 @@ function ensureSchema(db: D1Database): Promise<void> {
         db.prepare(
           `CREATE INDEX IF NOT EXISTS idx_wc_msg ON world_chat_messages (room_id, created_at_ms ASC)`
         ),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS world_chat_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            reporter_id TEXT NOT NULL,
+            reported_id TEXT NOT NULL,
+            room_id TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            created_at_ms INTEGER NOT NULL
+          )
+        `),
+        db.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_wc_rep ON world_chat_reports (reported_id, created_at_ms DESC)`
+        ),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS starforge_scores (
+            mode TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            player_name TEXT NOT NULL,
+            score INTEGER NOT NULL DEFAULT 0,
+            wave INTEGER NOT NULL DEFAULT 1,
+            kills INTEGER NOT NULL DEFAULT 0,
+            hero_id TEXT NOT NULL DEFAULT 'kael',
+            ascension INTEGER NOT NULL DEFAULT 1,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (mode, device_id)
+          )
+        `),
+        db.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_sf_score ON starforge_scores (mode, score DESC, wave DESC, updated_at ASC)`
+        ),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS fish_eater_scores (
+            device_id TEXT PRIMARY KEY,
+            player_name TEXT NOT NULL,
+            fish_eaten INTEGER NOT NULL DEFAULT 0,
+            max_size_cm INTEGER NOT NULL DEFAULT 10,
+            best_rank INTEGER NOT NULL DEFAULT 1,
+            skin_id TEXT NOT NULL DEFAULT 'ruby',
+            updated_at TEXT NOT NULL
+          )
+        `),
+        db.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_fe_score ON fish_eater_scores (fish_eaten DESC, max_size_cm DESC, updated_at ASC)`
+        ),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS apex_underground_scores (
+            device_id TEXT PRIMARY KEY,
+            player_name TEXT NOT NULL,
+            score INTEGER NOT NULL DEFAULT 0,
+            best_mode TEXT NOT NULL DEFAULT 'sprint',
+            car_name TEXT NOT NULL DEFAULT 'Starter',
+            updated_at TEXT NOT NULL
+          )
+        `),
+        db.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_au_score ON apex_underground_scores (score DESC, updated_at ASC)`
+        ),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS critter_kart_scores (
+            device_id TEXT PRIMARY KEY,
+            player_name TEXT NOT NULL,
+            score INTEGER NOT NULL DEFAULT 0,
+            trophies INTEGER NOT NULL DEFAULT 0,
+            driver_name TEXT NOT NULL DEFAULT 'Pip',
+            updated_at TEXT NOT NULL
+          )
+        `),
+        db.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_ck_score ON critter_kart_scores (score DESC, trophies DESC, updated_at ASC)`
+        ),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS dune_baja_scores (
+            device_id TEXT PRIMARY KEY,
+            player_name TEXT NOT NULL,
+            best_meters INTEGER NOT NULL DEFAULT 0,
+            total_flips INTEGER NOT NULL DEFAULT 0,
+            vehicle_name TEXT NOT NULL DEFAULT 'Sandhopper',
+            updated_at TEXT NOT NULL
+          )
+        `),
+        db.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_db_score ON dune_baja_scores (best_meters DESC, total_flips DESC, updated_at ASC)`
+        ),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS skycommand_scores (
+            device_id TEXT PRIMARY KEY,
+            player_name TEXT NOT NULL,
+            score INTEGER NOT NULL DEFAULT 0,
+            best_fpm INTEGER NOT NULL DEFAULT 999,
+            aircraft_name TEXT NOT NULL DEFAULT 'Talon X-22',
+            updated_at TEXT NOT NULL
+          )
+        `),
+        db.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_sc_score ON skycommand_scores (score DESC, best_fpm ASC, updated_at ASC)`
+        ),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS ai_virusworld_scores (
+            device_id TEXT PRIMARY KEY,
+            player_name TEXT NOT NULL,
+            score INTEGER NOT NULL DEFAULT 0,
+            turns INTEGER NOT NULL DEFAULT 1,
+            difficulty TEXT NOT NULL DEFAULT 'easy',
+            faction_name TEXT NOT NULL DEFAULT 'GeePeeTy',
+            updated_at TEXT NOT NULL
+          )
+        `),
+        db.prepare(
+          `CREATE INDEX IF NOT EXISTS idx_av_score ON ai_virusworld_scores (score DESC, turns ASC, updated_at ASC)`
+        ),
       ])
       .then(() => undefined)
       .catch((err) => {
@@ -1738,7 +1848,15 @@ async function handleWorldChat(request: Request, url: URL, env: Env): Promise<Re
 
     const nickname = cleanName(body?.nickname, 'Globetrotter');
     const gender = body?.gender === 'vrouw' ? 'vrouw' : 'man';
-    const targetGender = gender === 'man' ? 'vrouw' : 'man';
+    const pref =
+      body?.targetGender === 'any' || body?.targetGender === 'man' || body?.targetGender === 'vrouw'
+        ? (body.targetGender as string)
+        : gender === 'man'
+          ? 'vrouw'
+          : 'man';
+    const blockedIds = Array.isArray(body?.blockedIds)
+      ? new Set(body.blockedIds.filter((x): x is string => typeof x === 'string').slice(0, 100))
+      : new Set<string>();
     const countryName = cleanName(body?.countryName, 'Wereld').slice(0, 32);
     const countryFlag = typeof body?.countryFlag === 'string' ? body.countryFlag.slice(0, 8) : '🌍';
     const languages = Array.isArray(body?.languages)
@@ -1748,7 +1866,10 @@ async function handleWorldChat(request: Request, url: URL, env: Env): Promise<Re
     const nowMs = Date.now();
     const staleCutoff = nowMs - 20_000;
 
-    await env.DB.prepare(`DELETE FROM world_chat_queue WHERE updated_at_ms < ?`).bind(staleCutoff).run();
+    await env.DB.batch([
+      env.DB.prepare(`DELETE FROM world_chat_queue WHERE updated_at_ms < ?`).bind(staleCutoff),
+      env.DB.prepare(`DELETE FROM world_chat_messages WHERE created_at_ms < ?`).bind(nowMs - 2 * 60 * 60 * 1000),
+    ]);
 
     // Check if we were already matched while polling!
     const existing = await env.DB.prepare(
@@ -1756,15 +1877,20 @@ async function handleWorldChat(request: Request, url: URL, env: Env): Promise<Re
     ).bind(deviceId).first<WorldChatQueueRow>();
 
     if (existing && existing.status === 'matched' && existing.room_id && existing.partner_json) {
-      await env.DB.prepare(`UPDATE world_chat_queue SET updated_at_ms = ? WHERE device_id = ?`)
-        .bind(nowMs, deviceId)
-        .run();
-      return jsonResponse({
-        ok: true,
-        matched: true,
-        roomId: existing.room_id,
-        partner: JSON.parse(existing.partner_json) as unknown,
-      });
+      const parsedPartner = JSON.parse(existing.partner_json) as { id?: string };
+      if (parsedPartner?.id && blockedIds.has(parsedPartner.id)) {
+        await env.DB.prepare(`DELETE FROM world_chat_queue WHERE device_id = ?`).bind(deviceId).run();
+      } else {
+        await env.DB.prepare(`UPDATE world_chat_queue SET updated_at_ms = ? WHERE device_id = ?`)
+          .bind(nowMs, deviceId)
+          .run();
+        return jsonResponse({
+          ok: true,
+          matched: true,
+          roomId: existing.room_id,
+          partner: parsedPartner,
+        });
+      }
     }
 
     // Upsert ourselves as searching
@@ -1784,12 +1910,22 @@ async function handleWorldChat(request: Request, url: URL, env: Env): Promise<Re
          updated_at_ms = excluded.updated_at_ms`
     ).bind(deviceId, nickname, gender, countryName, countryFlag, JSON.stringify(languages), allowGlobal, nowMs).run();
 
-    const { results } = await env.DB.prepare(
-      `SELECT * FROM world_chat_queue WHERE status = 'searching' AND gender = ? AND device_id != ? AND updated_at_ms >= ? ORDER BY updated_at_ms ASC LIMIT 25`
-    ).bind(targetGender, deviceId, staleCutoff).all<WorldChatQueueRow>();
+    const { results } =
+      pref === 'any'
+        ? await env.DB.prepare(
+            `SELECT * FROM world_chat_queue WHERE status = 'searching' AND device_id != ? AND updated_at_ms >= ? ORDER BY updated_at_ms ASC LIMIT 30`
+          )
+            .bind(deviceId, staleCutoff)
+            .all<WorldChatQueueRow>()
+        : await env.DB.prepare(
+            `SELECT * FROM world_chat_queue WHERE status = 'searching' AND gender = ? AND device_id != ? AND updated_at_ms >= ? ORDER BY updated_at_ms ASC LIMIT 30`
+          )
+            .bind(pref, deviceId, staleCutoff)
+            .all<WorldChatQueueRow>();
 
     let chosen: WorldChatQueueRow | null = null;
     for (const cand of results) {
+      if (blockedIds.has(cand.device_id)) continue;
       let candLangs: string[] = [];
       try {
         candLangs = JSON.parse(cand.languages_json) as string[];
@@ -1839,14 +1975,21 @@ async function handleWorldChat(request: Request, url: URL, env: Env): Promise<Re
       bio: `Live uit ${countryName}`,
     };
 
-    await env.DB.batch([
-      env.DB.prepare(
-        `UPDATE world_chat_queue SET status = 'matched', room_id = ?, partner_json = ?, updated_at_ms = ? WHERE device_id = ?`
-      ).bind(roomId, JSON.stringify(partnerForMe), nowMs, deviceId),
-      env.DB.prepare(
-        `UPDATE world_chat_queue SET status = 'matched', room_id = ?, partner_json = ?, updated_at_ms = ? WHERE device_id = ?`
-      ).bind(roomId, JSON.stringify(partnerForOther), nowMs, chosen.device_id),
-    ]);
+    const claimOther = await env.DB.prepare(
+      `UPDATE world_chat_queue SET status = 'matched', room_id = ?, partner_json = ?, updated_at_ms = ? WHERE device_id = ? AND status = 'searching'`
+    )
+      .bind(roomId, JSON.stringify(partnerForOther), nowMs, chosen.device_id)
+      .run();
+
+    if (!claimOther.meta?.changes) {
+      return jsonResponse({ ok: true, matched: false, waitingCount: Math.max(0, results.length - 1) });
+    }
+
+    await env.DB.prepare(
+      `UPDATE world_chat_queue SET status = 'matched', room_id = ?, partner_json = ?, updated_at_ms = ? WHERE device_id = ?`
+    )
+      .bind(roomId, JSON.stringify(partnerForMe), nowMs, deviceId)
+      .run();
 
     return jsonResponse({
       ok: true,
@@ -1867,18 +2010,19 @@ async function handleWorldChat(request: Request, url: URL, env: Env): Promise<Re
       return jsonResponse({ ok: false, error: 'INVALID_MESSAGE' }, 400);
     }
     const nowMs = Date.now();
-    await env.DB.prepare(
+    const res = await env.DB.prepare(
       `INSERT INTO world_chat_messages (room_id, sender_id, sender_name, text, lang, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)`
     ).bind(roomId, senderId, senderName, text, lang, nowMs).run();
     await env.DB.prepare(`UPDATE world_chat_queue SET updated_at_ms = ? WHERE device_id = ?`)
       .bind(nowMs, senderId)
       .run();
-    return jsonResponse({ ok: true });
+    return jsonResponse({ ok: true, id: res.meta?.last_row_id ?? 0, createdAtMs: nowMs });
   }
 
   if (request.method === 'GET' && path === '/api/world-chat/poll') {
     const roomId = url.searchParams.get('roomId')?.trim() || '';
     const deviceId = url.searchParams.get('deviceId')?.trim() || '';
+    const afterId = Math.max(0, Number(url.searchParams.get('afterId') || 0));
     const since = Math.max(0, Number(url.searchParams.get('since') || 0));
     if (!roomId || !deviceId) {
       return jsonResponse({ ok: false, error: 'MISSING_PARAMS' }, 400);
@@ -1888,13 +2032,26 @@ async function handleWorldChat(request: Request, url: URL, env: Env): Promise<Re
       .bind(nowMs, deviceId)
       .run();
 
-    const { results } = await env.DB.prepare(
-      `SELECT id, room_id, sender_id, sender_name, text, lang, created_at_ms
-       FROM world_chat_messages
-       WHERE room_id = ? AND created_at_ms > ?
-       ORDER BY created_at_ms ASC
-       LIMIT 50`
-    ).bind(roomId, since).all<WorldChatMsgRow>();
+    const { results } =
+      afterId > 0
+        ? await env.DB.prepare(
+            `SELECT id, room_id, sender_id, sender_name, text, lang, created_at_ms
+             FROM world_chat_messages
+             WHERE room_id = ? AND id > ?
+             ORDER BY id ASC
+             LIMIT 50`
+          )
+            .bind(roomId, afterId)
+            .all<WorldChatMsgRow>()
+        : await env.DB.prepare(
+            `SELECT id, room_id, sender_id, sender_name, text, lang, created_at_ms
+             FROM world_chat_messages
+             WHERE room_id = ? AND created_at_ms > ?
+             ORDER BY id ASC
+             LIMIT 50`
+          )
+            .bind(roomId, since)
+            .all<WorldChatMsgRow>();
 
     const peer = await env.DB.prepare(
       `SELECT device_id FROM world_chat_queue WHERE room_id = ? AND device_id != ? AND status = 'matched' AND updated_at_ms >= ?`
@@ -1914,12 +2071,278 @@ async function handleWorldChat(request: Request, url: URL, env: Env): Promise<Re
     });
   }
 
+  if (request.method === 'POST' && path === '/api/world-chat/report') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const reporterId = cleanDeviceId(body?.reporterId);
+    const reportedId = cleanDeviceId(body?.reportedId);
+    const roomId = cleanName(body?.roomId, 'unknown').slice(0, 64);
+    const reason = cleanName(body?.reason, 'inappropriate').slice(0, 120);
+    if (!reporterId || !reportedId) {
+      return jsonResponse({ ok: false, error: 'INVALID_REPORT' }, 400);
+    }
+    await env.DB.prepare(
+      `INSERT INTO world_chat_reports (reporter_id, reported_id, room_id, reason, created_at_ms) VALUES (?, ?, ?, ?, ?)`
+    )
+      .bind(reporterId, reportedId, roomId, reason, Date.now())
+      .run();
+    return jsonResponse({ ok: true });
+  }
+
   if (request.method === 'POST' && path === '/api/world-chat/leave') {
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     const deviceId = cleanDeviceId(body?.deviceId);
     if (deviceId) {
       await env.DB.prepare(`DELETE FROM world_chat_queue WHERE device_id = ?`).bind(deviceId).run();
     }
+    return jsonResponse({ ok: true });
+  }
+
+  return null;
+}
+
+async function handleExtendedGames(request: Request, url: URL, env: Env): Promise<Response | null> {
+  const path = url.pathname;
+  const limit = Math.max(5, Math.min(50, Number(url.searchParams.get('limit') || 25)));
+  const nowIso = new Date().toISOString();
+
+  // 1. Starforge Survivors
+  if (request.method === 'GET' && path === '/api/starforge/highscores') {
+    const mode = cleanName(url.searchParams.get('mode'), 'endless').toLowerCase().slice(0, 20);
+    const { results } = await env.DB.prepare(
+      `SELECT device_id, player_name, score, wave, kills, hero_id, ascension, updated_at
+       FROM starforge_scores WHERE mode = ? ORDER BY score DESC, wave DESC, updated_at ASC LIMIT ?`
+    )
+      .bind(mode, limit)
+      .all<Record<string, unknown>>();
+    return jsonResponse({ ok: true, mode, entries: results });
+  }
+  if (request.method === 'POST' && path === '/api/starforge/score') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const deviceId = cleanDeviceId(body?.deviceId);
+    if (!deviceId) return jsonResponse({ ok: false, error: 'INVALID_DEVICE_ID' }, 400);
+    const mode = cleanName(body?.mode, 'endless').toLowerCase().slice(0, 20);
+    const playerName = cleanName(body?.playerName, 'Commander');
+    const score = Math.max(0, Math.min(999_999_999, Math.round(Number(body?.score) || 0)));
+    const wave = Math.max(1, Math.min(9999, Math.round(Number(body?.wave) || 1)));
+    const kills = Math.max(0, Math.min(9_999_999, Math.round(Number(body?.kills) || 0)));
+    const heroId = cleanName(body?.heroId, 'kael').slice(0, 24);
+    const ascension = Math.max(1, Math.min(10, Math.round(Number(body?.ascension) || 1)));
+    await env.DB.prepare(
+      `INSERT INTO starforge_scores (mode, device_id, player_name, score, wave, kills, hero_id, ascension, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(mode, device_id) DO UPDATE SET
+         player_name = excluded.player_name,
+         score = MAX(starforge_scores.score, excluded.score),
+         wave = MAX(starforge_scores.wave, excluded.wave),
+         kills = MAX(starforge_scores.kills, excluded.kills),
+         hero_id = CASE WHEN excluded.score >= starforge_scores.score THEN excluded.hero_id ELSE starforge_scores.hero_id END,
+         ascension = MAX(starforge_scores.ascension, excluded.ascension),
+         updated_at = excluded.updated_at`
+    )
+      .bind(mode, deviceId, playerName, score, wave, kills, heroId, ascension, nowIso)
+      .run();
+    return jsonResponse({ ok: true });
+  }
+
+  // 2. Fish Eater
+  if (request.method === 'GET' && path === '/api/fish-eater/highscores') {
+    const { results } = await env.DB.prepare(
+      `SELECT device_id, player_name, fish_eaten, max_size_cm, best_rank, skin_id, updated_at
+       FROM fish_eater_scores ORDER BY fish_eaten DESC, max_size_cm DESC, updated_at ASC LIMIT ?`
+    )
+      .bind(limit)
+      .all<Record<string, unknown>>();
+    return jsonResponse({ ok: true, entries: results });
+  }
+  if (request.method === 'POST' && path === '/api/fish-eater/score') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const deviceId = cleanDeviceId(body?.deviceId);
+    if (!deviceId) return jsonResponse({ ok: false, error: 'INVALID_DEVICE_ID' }, 400);
+    const playerName = cleanName(body?.playerName, 'Piranha');
+    const fishEaten = Math.max(0, Math.min(999_999, Math.round(Number(body?.fishEaten) || 0)));
+    const maxSizeCm = Math.max(1, Math.min(99_999, Math.round(Number(body?.maxSizeCm) || 10)));
+    const bestRank = Math.max(1, Math.min(100, Math.round(Number(body?.bestRank) || 1)));
+    const skinId = cleanName(body?.skinId, 'ruby').slice(0, 24);
+    await env.DB.prepare(
+      `INSERT INTO fish_eater_scores (device_id, player_name, fish_eaten, max_size_cm, best_rank, skin_id, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(device_id) DO UPDATE SET
+         player_name = excluded.player_name,
+         fish_eaten = MAX(fish_eater_scores.fish_eaten, excluded.fish_eaten),
+         max_size_cm = MAX(fish_eater_scores.max_size_cm, excluded.max_size_cm),
+         best_rank = MAX(fish_eater_scores.best_rank, excluded.best_rank),
+         skin_id = excluded.skin_id,
+         updated_at = excluded.updated_at`
+    )
+      .bind(deviceId, playerName, fishEaten, maxSizeCm, bestRank, skinId, nowIso)
+      .run();
+    return jsonResponse({ ok: true });
+  }
+
+  // 3. Apex Underground
+  if (request.method === 'GET' && path === '/api/apex-underground/highscores') {
+    const { results } = await env.DB.prepare(
+      `SELECT device_id, player_name, score, best_mode, car_name, updated_at
+       FROM apex_underground_scores ORDER BY score DESC, updated_at ASC LIMIT ?`
+    )
+      .bind(limit)
+      .all<Record<string, unknown>>();
+    return jsonResponse({ ok: true, entries: results });
+  }
+  if (request.method === 'POST' && path === '/api/apex-underground/score') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const deviceId = cleanDeviceId(body?.deviceId);
+    if (!deviceId) return jsonResponse({ ok: false, error: 'INVALID_DEVICE_ID' }, 400);
+    const playerName = cleanName(body?.playerName, 'StreetRacer');
+    const score = Math.max(0, Math.min(999_999_999, Math.round(Number(body?.score) || 0)));
+    const bestMode = cleanName(body?.bestMode, 'sprint').slice(0, 24);
+    const carName = cleanName(body?.carName, 'Starter').slice(0, 32);
+    await env.DB.prepare(
+      `INSERT INTO apex_underground_scores (device_id, player_name, score, best_mode, car_name, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(device_id) DO UPDATE SET
+         player_name = excluded.player_name,
+         score = MAX(apex_underground_scores.score, excluded.score),
+         best_mode = excluded.best_mode,
+         car_name = excluded.car_name,
+         updated_at = excluded.updated_at`
+    )
+      .bind(deviceId, playerName, score, bestMode, carName, nowIso)
+      .run();
+    return jsonResponse({ ok: true });
+  }
+
+  // 4. Critter Kart GP
+  if (request.method === 'GET' && path === '/api/critter-kart/highscores') {
+    const { results } = await env.DB.prepare(
+      `SELECT device_id, player_name, score, trophies, driver_name, updated_at
+       FROM critter_kart_scores ORDER BY score DESC, trophies DESC, updated_at ASC LIMIT ?`
+    )
+      .bind(limit)
+      .all<Record<string, unknown>>();
+    return jsonResponse({ ok: true, entries: results });
+  }
+  if (request.method === 'POST' && path === '/api/critter-kart/score') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const deviceId = cleanDeviceId(body?.deviceId);
+    if (!deviceId) return jsonResponse({ ok: false, error: 'INVALID_DEVICE_ID' }, 400);
+    const playerName = cleanName(body?.playerName, 'KartRacer');
+    const score = Math.max(0, Math.min(999_999, Math.round(Number(body?.score) || 0)));
+    const trophies = Math.max(0, Math.min(9999, Math.round(Number(body?.trophies) || 0)));
+    const driverName = cleanName(body?.driverName, 'Pip').slice(0, 24);
+    await env.DB.prepare(
+      `INSERT INTO critter_kart_scores (device_id, player_name, score, trophies, driver_name, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(device_id) DO UPDATE SET
+         player_name = excluded.player_name,
+         score = MAX(critter_kart_scores.score, excluded.score),
+         trophies = MAX(critter_kart_scores.trophies, excluded.trophies),
+         driver_name = excluded.driver_name,
+         updated_at = excluded.updated_at`
+    )
+      .bind(deviceId, playerName, score, trophies, driverName, nowIso)
+      .run();
+    return jsonResponse({ ok: true });
+  }
+
+  // 5. Dune Baja Rally
+  if (request.method === 'GET' && path === '/api/dune-baja/highscores') {
+    const { results } = await env.DB.prepare(
+      `SELECT device_id, player_name, best_meters, total_flips, vehicle_name, updated_at
+       FROM dune_baja_scores ORDER BY best_meters DESC, total_flips DESC, updated_at ASC LIMIT ?`
+    )
+      .bind(limit)
+      .all<Record<string, unknown>>();
+    return jsonResponse({ ok: true, entries: results });
+  }
+  if (request.method === 'POST' && path === '/api/dune-baja/score') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const deviceId = cleanDeviceId(body?.deviceId);
+    if (!deviceId) return jsonResponse({ ok: false, error: 'INVALID_DEVICE_ID' }, 400);
+    const playerName = cleanName(body?.playerName, 'RallyDriver');
+    const bestMeters = Math.max(0, Math.min(9_999_999, Math.round(Number(body?.bestMeters) || 0)));
+    const totalFlips = Math.max(0, Math.min(99_999, Math.round(Number(body?.totalFlips) || 0)));
+    const vehicleName = cleanName(body?.vehicleName, 'Sandhopper').slice(0, 28);
+    await env.DB.prepare(
+      `INSERT INTO dune_baja_scores (device_id, player_name, best_meters, total_flips, vehicle_name, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(device_id) DO UPDATE SET
+         player_name = excluded.player_name,
+         best_meters = MAX(dune_baja_scores.best_meters, excluded.best_meters),
+         total_flips = MAX(dune_baja_scores.total_flips, excluded.total_flips),
+         vehicle_name = excluded.vehicle_name,
+         updated_at = excluded.updated_at`
+    )
+      .bind(deviceId, playerName, bestMeters, totalFlips, vehicleName, nowIso)
+      .run();
+    return jsonResponse({ ok: true });
+  }
+
+  // 6. SkyCommand 3D
+  if (request.method === 'GET' && path === '/api/skycommand/highscores') {
+    const { results } = await env.DB.prepare(
+      `SELECT device_id, player_name, score, best_fpm, aircraft_name, updated_at
+       FROM skycommand_scores ORDER BY score DESC, best_fpm ASC, updated_at ASC LIMIT ?`
+    )
+      .bind(limit)
+      .all<Record<string, unknown>>();
+    return jsonResponse({ ok: true, entries: results });
+  }
+  if (request.method === 'POST' && path === '/api/skycommand/score') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const deviceId = cleanDeviceId(body?.deviceId);
+    if (!deviceId) return jsonResponse({ ok: false, error: 'INVALID_DEVICE_ID' }, 400);
+    const playerName = cleanName(body?.playerName, 'Captain');
+    const score = Math.max(0, Math.min(999_999, Math.round(Number(body?.score) || 0)));
+    const bestFpm = Math.max(1, Math.min(2000, Math.round(Number(body?.bestFpm) || 500)));
+    const aircraftName = cleanName(body?.aircraftName, 'Talon X-22').slice(0, 28);
+    await env.DB.prepare(
+      `INSERT INTO skycommand_scores (device_id, player_name, score, best_fpm, aircraft_name, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(device_id) DO UPDATE SET
+         player_name = excluded.player_name,
+         score = MAX(skycommand_scores.score, excluded.score),
+         best_fpm = MIN(skycommand_scores.best_fpm, excluded.best_fpm),
+         aircraft_name = excluded.aircraft_name,
+         updated_at = excluded.updated_at`
+    )
+      .bind(deviceId, playerName, score, bestFpm, aircraftName, nowIso)
+      .run();
+    return jsonResponse({ ok: true });
+  }
+
+  // 7. AI VIRUSWORLD
+  if (request.method === 'GET' && path === '/api/ai-virusworld/highscores') {
+    const { results } = await env.DB.prepare(
+      `SELECT device_id, player_name, score, turns, difficulty, faction_name, updated_at
+       FROM ai_virusworld_scores ORDER BY score DESC, turns ASC, updated_at ASC LIMIT ?`
+    )
+      .bind(limit)
+      .all<Record<string, unknown>>();
+    return jsonResponse({ ok: true, entries: results });
+  }
+  if (request.method === 'POST' && path === '/api/ai-virusworld/score') {
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    const deviceId = cleanDeviceId(body?.deviceId);
+    if (!deviceId) return jsonResponse({ ok: false, error: 'INVALID_DEVICE_ID' }, 400);
+    const playerName = cleanName(body?.playerName, 'Architect');
+    const score = Math.max(0, Math.min(999_999, Math.round(Number(body?.score) || 0)));
+    const turns = Math.max(1, Math.min(999, Math.round(Number(body?.turns) || 20)));
+    const difficulty = cleanName(body?.difficulty, 'easy').toLowerCase().slice(0, 16);
+    const factionName = cleanName(body?.factionName, 'GeePeeTy').slice(0, 28);
+    await env.DB.prepare(
+      `INSERT INTO ai_virusworld_scores (device_id, player_name, score, turns, difficulty, faction_name, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(device_id) DO UPDATE SET
+         player_name = excluded.player_name,
+         score = MAX(ai_virusworld_scores.score, excluded.score),
+         turns = CASE WHEN excluded.score >= ai_virusworld_scores.score THEN excluded.turns ELSE ai_virusworld_scores.turns END,
+         difficulty = CASE WHEN excluded.score >= ai_virusworld_scores.score THEN excluded.difficulty ELSE ai_virusworld_scores.difficulty END,
+         faction_name = excluded.faction_name,
+         updated_at = excluded.updated_at`
+    )
+      .bind(deviceId, playerName, score, turns, difficulty, factionName, nowIso)
+      .run();
     return jsonResponse({ ok: true });
   }
 
@@ -1952,6 +2375,13 @@ export default {
           'castle-bastion',
           'turbo-drift',
           'world-chat',
+          'starforge',
+          'fish-eater',
+          'apex-underground',
+          'critter-kart',
+          'dune-baja',
+          'skycommand',
+          'ai-virusworld',
         ],
       });
     }
@@ -1996,6 +2426,9 @@ export default {
 
     const wc = await handleWorldChat(request, url, env);
     if (wc) return wc;
+
+    const ext = await handleExtendedGames(request, url, env);
+    if (ext) return ext;
 
     return jsonResponse({ ok: false, error: 'NOT_FOUND' }, 404);
   },
